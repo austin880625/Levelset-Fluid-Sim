@@ -1,0 +1,20 @@
+#version 330 core
+
+// Input vertex data, different for all executions of this shader.
+layout(location = 0) in vec3 vertexPosition_modelspace;
+layout(location = 1) in vec3 normal;
+
+out vec3 n;
+out vec3 l;
+
+uniform mat4 mvp;
+uniform mat4 m;
+uniform mat4 v;
+uniform vec3 lightPos;
+
+void main(){
+	gl_Position = mvp*vec4(vertexPosition_modelspace, 1);
+	n = (v*m*vec4(normal,0)).xyz;
+	l = (v*vec4(lightPos,1)).xyz;
+}
+
