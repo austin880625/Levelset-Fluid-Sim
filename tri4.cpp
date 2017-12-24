@@ -11,6 +11,8 @@
 
 GLfloat ***sp;
 GLFWwindow *window;
+int screen_width = 1024;
+int screen_height = 600;
 using namespace glm;
 int main()
 {
@@ -26,7 +28,7 @@ int main()
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	window = glfwCreateWindow(1024, 600, "Trivago", NULL, NULL);
+	window = glfwCreateWindow(screen_width, screen_height, "Trivago", NULL, NULL);
 
 	glfwMakeContextCurrent(window);
 	glewExperimental = true; // Needed for core profile
@@ -62,7 +64,7 @@ int main()
 
 	glClearColor(0, 0, 0.4f, 0);
 	
-	mat4 projection = perspective(radians(45.0f), (float)1024/(float)600, 0.1f, 100.0f);	
+	mat4 projection = perspective(radians(45.0f), (float)screen_width/(float)screen_height, 0.1f, 100.0f);	
 	
 	GLuint mvpMatrixID = glGetUniformLocation(programID, "mvp");
 	GLuint mMatrixID = glGetUniformLocation(programID, "m");
@@ -70,9 +72,10 @@ int main()
 	GLuint lightVecID = glGetUniformLocation(programID, "lightPos");
 	int angle=0;
 	do{
-		glClear( GL_COLOR_BUFFER_BIT );
+		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		
 		angle = (angle+2)%360;
+		printf("%d\n",angle);
 		mat4 view = lookAt(vec3(15*cos(angle*M_PI/180.0f),3,15*sin(angle*M_PI/180.0f)), vec3(0,0,0), vec3(0,1,0));
 		mat4 model = mat4(1.0f);
 		mat4 mvp = projection*view*model;

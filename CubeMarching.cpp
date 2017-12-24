@@ -307,9 +307,9 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 					if(g_vertex.size()%3==0){
 						v1 = g_vertex.back() - g_vertex[g_vertex.size()-3];
 						v2 = g_vertex[g_vertex.size()-2] - g_vertex.back();
-						g_normal.push_back(cross(v2, v1));
-						g_normal.push_back(cross(v2, v1));
-						g_normal.push_back(cross(v2, v1));
+						g_normal.push_back(cross(v1, v2));
+						g_normal.push_back(cross(v1, v2));
+						g_normal.push_back(cross(v1, v2));
 					}
 				}
 			}
@@ -320,6 +320,7 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 
 void CubeMarching::draw()
 {
+	glEnable(GL_DEPTH_TEST);
 	glBindBuffer(GL_ARRAY_BUFFER, normalbuffer);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, g_normal.size()*sizeof(glm::vec3), &g_normal[0]);
 	glEnableVertexAttribArray(1);
