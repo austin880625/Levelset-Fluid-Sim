@@ -44,7 +44,7 @@ int main()
 	GLuint programID = LoadShaders( "SimpleVertexShader.vertexshader", "SimpleFragmentShader.fragmentshader" );
 
 	CubeMarching::init();	
-	int maxn=101;
+	int maxn=129;
 	sp = (GLfloat***)malloc((maxn+1)*sizeof(GLfloat**));sp[maxn]=NULL;
 	for(int i=0; i<maxn; i++){
 		sp[i] = (GLfloat**)malloc((maxn+1)*sizeof(GLfloat*));sp[i][maxn]=NULL;
@@ -53,6 +53,8 @@ int main()
 			for(int k=0; k<maxn; k++){
 				GLfloat d=14.0f/(maxn-1); 
 				GLfloat x=-7.0f+i*d, y=-7.0f+j*d, z=-7.0f+k*d;
+				//GLfloat x=-1.0f+i*d, y=-1.0f+j*d, z=-1.0f+k*d;
+				//sp[i][j][k] = x*x+y*y+z*z-1;
 				//printf("%f %f %f\n",x,y,z);
 				float r=sqrt(x*x+y*y+z*z);
 				float phi = 0.204*r*exp(-r/2)*(0.488*z/r);
@@ -70,12 +72,11 @@ int main()
 	GLuint mMatrixID = glGetUniformLocation(programID, "m");
 	GLuint vMatrixID = glGetUniformLocation(programID, "v");
 	GLuint lightVecID = glGetUniformLocation(programID, "lightPos");
-	int angle=0;
+	int angle=90;
 	do{
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		
 		angle = (angle+2)%360;
-		printf("%d\n",angle);
 		mat4 view = lookAt(vec3(15*cos(angle*M_PI/180.0f),3,15*sin(angle*M_PI/180.0f)), vec3(0,0,0), vec3(0,1,0));
 		mat4 model = mat4(1.0f);
 		mat4 mvp = projection*view*model;

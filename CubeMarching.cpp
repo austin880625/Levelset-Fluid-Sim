@@ -1,6 +1,6 @@
 #include "CubeMarching.hpp"
 namespace {
-	const int MAX_LENGTH = 102;
+	const int MAX_LENGTH = 202;
 	const int MAX_VERTEX = MAX_LENGTH*MAX_LENGTH*(MAX_LENGTH-1)*3;
 	static GLuint vertexbuffer;
 	static GLuint normalbuffer;
@@ -303,13 +303,15 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 				if (grid[i][j+1][k+1] < 0.0f) cubeIndex |= 128;
 
 				for(int t=0; triTable[cubeIndex][t] != -1; t++){
-					g_vertex.push_back(glm::vec3( -7.0f+sx*(i+dx[triTable[cubeIndex][t]]), -7.0f+sy*(j+dy[triTable[cubeIndex][t]]), -7.0f+sz*(k+dz[triTable[cubeIndex][t]]) ));
+					g_vertex.push_back(glm::vec3( -length/2+sx*(i+dx[triTable[cubeIndex][t]]), -length/2+sy*(j+dy[triTable[cubeIndex][t]]), -length/2+sz*(k+dz[triTable[cubeIndex][t]]) ));
 					if(g_vertex.size()%3==0){
 						v1 = g_vertex.back() - g_vertex[g_vertex.size()-3];
 						v2 = g_vertex[g_vertex.size()-2] - g_vertex.back();
-						g_normal.push_back(cross(v1, v2));
-						g_normal.push_back(cross(v1, v2));
-						g_normal.push_back(cross(v1, v2));
+						glm::vec3 norm = cross(v2,v1);
+						//printf("%f\n",glm::dot(glm::normalize(norm),glm::normalize(glm::vec3(10,10,10))));
+						g_normal.push_back(norm);
+						g_normal.push_back(norm);
+						g_normal.push_back(norm);
 					}
 				}
 			}
@@ -333,4 +335,5 @@ void CubeMarching::draw()
 
 	glDrawArrays(GL_TRIANGLES, 0, 3*g_vertex.size());
 	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
 }

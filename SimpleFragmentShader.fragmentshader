@@ -11,8 +11,8 @@ void main()
 
 	// Output color = red 
 	vec3 lightColor = vec3(0.7,0.7,0.7);
-	float lightPower = 10.0f;
+	float lightPower = 1.0f;
 	float cosTheta = clamp(dot(normalize(n), normalize(l)),0,1);
-	color = vec3(0,0,0.1)+vec3(0,0,1)*cosTheta*lightPower*lightColor;
+	color = vec3(0,0,0.5)+vec3(0,0,1)*cosTheta*lightPower*lightColor;
 
 }
