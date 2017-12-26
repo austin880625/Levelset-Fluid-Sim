@@ -289,6 +289,15 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 	g_vertex.clear();
 	g_normal.clear();
 	//enumerating by the order of depth
+	auto cmp = [](glm::vec3 const& l, glm::vec3 const& r)->bool{
+		if(l.x!=r.x) return l.x<r.x;
+		if(l.y!=r.y) return l.y<r.y;
+		if(l.z!=r.z) return l.z<r.z;
+		return false;
+	};
+	std::map<glm::vec3, int, std::function<bool(glm::vec3 const&, glm::vec3 const&)> > cnt(cmp);
+	std::map<glm::vec3, glm::vec3, std::function<bool(glm::vec3 const&, glm::vec3 const&)> > getNormal(cmp); // vtx -> normal sum
+	int siz=0;
 	FOR(k,d){
 		FOR(i,w){
 			FOR(j,h){
@@ -301,19 +310,39 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 				if (grid[i+1][j+1][k] < 0.0f) cubeIndex |= 32;
 				if (grid[i+1][j+1][k+1] < 0.0f) cubeIndex |= 64;
 				if (grid[i][j+1][k+1] < 0.0f) cubeIndex |= 128;
-
 				for(int t=0; triTable[cubeIndex][t] != -1; t++){
 					g_vertex.push_back(glm::vec3( -7.0f+sx*(i+dx[triTable[cubeIndex][t]]), -7.0f+sy*(j+dy[triTable[cubeIndex][t]]), -7.0f+sz*(k+dz[triTable[cubeIndex][t]]) ));
 					if(g_vertex.size()%3==0){
-						v1 = g_vertex.back() - g_vertex[g_vertex.size()-3];
-						v2 = g_vertex[g_vertex.size()-2] - g_vertex.back();
-						g_normal.push_back(cross(v1, v2));
-						g_normal.push_back(cross(v1, v2));
-						g_normal.push_back(cross(v1, v2));
+						auto vtx1 = g_vertex.back(), vtx2 = g_vertex[g_vertex.size()-2], vtx3 = g_vertex[g_vertex.size()-3];
+						v1 = vtx1 - vtx3;
+						v2 = vtx2 - vtx1;
+						auto crs = cross(v1,v2);
+						double nrm = std::sqrt(crs.x*crs.x+crs.y*crs.y+crs.z*crs.z);
+						crs.x/=nrm, crs.y/=nrm, crs.z/=nrm;
+						siz+=3;
+						
+						if(cnt.count(vtx1)) ++cnt[vtx1], getNormal[vtx1]+=crs;
+						else cnt[vtx1] = 1, getNormal[vtx1] = crs;
+						if(cnt.count(vtx2)) ++cnt[vtx2], getNormal[vtx2]+=crs;
+						else cnt[vtx2] = 1, getNormal[vtx2] = crs;
+						if(cnt.count(vtx3)) ++cnt[vtx3], getNormal[vtx3]+=crs;
+						else cnt[vtx3] =1, getNormal[vtx3] = crs;
+						
+						//g_normal.push_back(crs);
+						//g_normal.push_back(crs);
+						//g_normal.push_back(crs);
 					}
 				}
 			}
 		}
+	}
+	g_normal.resize(siz);
+	for(int i=0;i<g_vertex.size();++i){
+		int n = cnt[g_vertex[i]];
+		glm::vec3 tmp = getNormal[g_vertex[i]];
+		g_normal[i].x = tmp.x/n;
+		g_normal[i].y = tmp.y/n;
+		g_normal[i].z = tmp.z/n;
 	}
 	//printf("%d\n",vertexIndex);
 }

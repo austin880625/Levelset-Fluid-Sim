@@ -75,7 +75,7 @@ int main()
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		
 		angle = (angle+2)%360;
-		printf("%d\n",angle);
+		//printf("%d\n",angle);
 		mat4 view = lookAt(vec3(15*cos(angle*M_PI/180.0f),3,15*sin(angle*M_PI/180.0f)), vec3(0,0,0), vec3(0,1,0));
 		mat4 model = mat4(1.0f);
 		mat4 mvp = projection*view*model;

@@ -2,6 +2,9 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <stdio.h>
+#include <map>
+#include <functional>
+#include <unordered_map>
 
 namespace CubeMarching{
 	void init();
