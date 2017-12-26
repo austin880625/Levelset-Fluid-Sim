@@ -316,7 +316,7 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 						auto vtx1 = g_vertex.back(), vtx2 = g_vertex[g_vertex.size()-2], vtx3 = g_vertex[g_vertex.size()-3];
 						v1 = vtx1 - vtx3;
 						v2 = vtx2 - vtx1;
-						auto crs = cross(v1,v2);
+						auto crs = cross(v2,v1);
 						double nrm = std::sqrt(crs.x*crs.x+crs.y*crs.y+crs.z*crs.z);
 						crs.x/=nrm, crs.y/=nrm, crs.z/=nrm;
 						siz+=3;
