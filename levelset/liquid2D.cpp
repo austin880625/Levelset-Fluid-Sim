@@ -78,9 +78,10 @@ void liquid2D::init( int n ) {
 	if( ! d ) d = alloc3D<FLOAT>(gn);
 	if( ! A ) A = alloc3D<FLOAT>(gn);
 	if( ! u ) {
-		u = new FLOAT **[3];
+		u = new FLOAT **[4];
 		u[0] = alloc3D<FLOAT>(gn+1);
 		u[1] = alloc3D<FLOAT>(gn+1);
+		u[2] = alloc3D<FLOAT>(gn+1);
 	}
 	// Clear Variables
 	FOR_EVERY_X_FLOW(gn) {
@@ -88,6 +89,9 @@ void liquid2D::init( int n ) {
 	} END_FOR;
 	FOR_EVERY_Y_FLOW(gn) {
 		u[1][i][j][k] = 0.0;
+	} END_FOR;
+	FOR_EVERY_Z_FLOW(gn) {
+		u[2][i][j][k] = 0.0;
 	} END_FOR;
 	
 	// Initialize LevelSet
@@ -311,14 +315,16 @@ static void enforce_boundary() {
 	} END_FOR;
 }
 
-static FLOAT ***gu = NULL;
+static FLOAT ****gu = NULL;
 
 // Clamped Fluid Flow Fetch
-static FLOAT u_ref( int dir, int i, int j ) {
+static FLOAT u_ref( int dir, int i, int j, int k ) {
 	if( dir == 0 )
-		return gu[0][max(0,min(gn,i))][max(0,min(gn-1,j))];
+		return gu[0][max(0,min(gn,i))][max(0,min(gn-1,j))][max(0,min(gn-1,k))];
+	else if( dir == 1)
+		return gu[1][max(0,min(gn-1,i))][max(0,min(gn,j))][max(0,min(gn-1,k))];
 	else
-		return gu[1][max(0,min(gn-1,i))][max(0,min(gn,j))];
+		return gu[2][max(0,min(gn-1,i))][max(0,min(gn-1,j))][max(0,min(gn,k))];
 }
 
 static void semiLagrangian( FLOAT **d, FLOAT **d0, int width, int height, FLOAT ***u ) {
