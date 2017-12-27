@@ -34,10 +34,10 @@ namespace {
 	static FLOAT volume_error = 0.0;
 	static FLOAT vdiv = 0.0;
 	
-	static FLOAT ***u = NULL;		// Access Bracket u[DIM][X][Y] ( Staggered Grid )
-	static FLOAT **p = NULL;		// Equivalent to p[N][N]
-	static FLOAT **d = NULL;		// Equivalent to d[N][N]
-	static FLOAT **A = NULL;		// Level Set Field
+	static FLOAT ****u = NULL;		// Access Bracket u[DIM][X][Y][Z] ( Staggered Grid )
+	static FLOAT ***p = NULL;		// Equivalent to p[N][N][N]
+	static FLOAT ***d = NULL;		// Equivalent to d[N][N][N]
+	static FLOAT ***A = NULL;		// Level Set Field
 	
 	static int reset_count = 0;
 	static int reset_num = 3;
@@ -74,20 +74,20 @@ static bool sphere( FLOAT x, FLOAT y ) {
 
 void liquid2D::init( int n ) {
 	gn = n;
-	if( ! p ) p = alloc2D<FLOAT>(gn);
-	if( ! d ) d = alloc2D<FLOAT>(gn);
-	if( ! A ) A = alloc2D<FLOAT>(gn);
+	if( ! p ) p = alloc3D<FLOAT>(gn);
+	if( ! d ) d = alloc3D<FLOAT>(gn);
+	if( ! A ) A = alloc3D<FLOAT>(gn);
 	if( ! u ) {
 		u = new FLOAT **[3];
-		u[0] = alloc2D<FLOAT>(gn+1);
-		u[1] = alloc2D<FLOAT>(gn+1);
+		u[0] = alloc3D<FLOAT>(gn+1);
+		u[1] = alloc3D<FLOAT>(gn+1);
 	}
 	// Clear Variables
 	FOR_EVERY_X_FLOW(gn) {
-		u[0][i][j] = 0.0;
+		u[0][i][j][k] = 0.0;
 	} END_FOR;
 	FOR_EVERY_Y_FLOW(gn) {
-		u[1][i][j] = 0.0;
+		u[1][i][j][k] = 0.0;
 	} END_FOR;
 	
 	// Initialize LevelSet
