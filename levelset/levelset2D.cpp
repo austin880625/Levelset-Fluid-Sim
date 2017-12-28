@@ -33,9 +33,9 @@ namespace {
 		FLOAT pos[2];
 		int gp[2];
 	} grid;
-	grid ** grids = NULL;
-	FLOAT ** grad[2] = { NULL, NULL };
-	FLOAT **test_q = NULL;
+	grid *** grids = NULL;
+	FLOAT *** grad[3] = { NULL, NULL, NULL };
+	FLOAT ***test_q = NULL;
 	static int gn;
 	struct gridComparison{
 		bool operator () ( grid * left, grid * right){
@@ -51,17 +51,19 @@ namespace {
 
 void levelset2D::init( int n ) {
 	// Allocate LevelSet Grids
-	grids = alloc2D<grid>(n);
-	grad[0] = alloc2D<FLOAT>(n);
-	grad[1] = alloc2D<FLOAT>(n);
-	test_q = alloc2D<FLOAT>(n);
+	grids = alloc3D<grid>(n);
+	grad[0] = alloc3D<FLOAT>(n);
+	grad[1] = alloc3D<FLOAT>(n);
+	grad[2] = alloc3D<FLOAT>(n);
+	test_q = alloc3D<FLOAT>(n);
 	gn = n;
 	FOR_EVERY_CELL(gn) {
-		grids[i][j].dist = 1.0;
-		grids[i][j].known = false;
-		grids[i][j].gp[0] = i;
-		grids[i][j].gp[1] = j;
-		grad[0][i][j] = grad[1][i][j] = 0.0;
+		grids[i][j][k].dist = 1.0;
+		grids[i][j][k].known = false;
+		grids[i][j][k].gp[0] = i;
+		grids[i][j][k].gp[1] = j;
+		grids[i][j][k].gp[2] = k;
+		grad[0][i][j][k] = grad[1][i][j][k] = grad[2][i][j][k] = 0.0;
 	} END_FOR;
 }
 
@@ -351,23 +353,25 @@ void levelset2D::redistance( FLOAT tolerance ) {
 #endif
 }
 
-void levelset2D::buildLevelset( bool (*func)(FLOAT x, FLOAT y), FLOAT tolerance ) {
+void levelset2D::buildLevelset( bool (*func)(FLOAT x, FLOAT y, FLOAT z), FLOAT tolerance ) {
 	// Initialize Distances
 	OPENMP_FOR FOR_EVERY_CELL(gn) {
 		FLOAT x = i/(FLOAT)(gn-1);
 		FLOAT y = j/(FLOAT)(gn-1);
+		FLOAT z = k/(FLOAT)(gn-1);
 		FLOAT sx = x;
 		FLOAT sy = y;
-		FLOAT hit;
-		hit = func(sx,sy);
+		FLOAT sz = z;
+		bool hit = func(sx,sy,sz);
 		grids[i][j].known = true;
 		grids[i][j].dist = hit ? -1.0 : 1.0;
 		grids[i][j].pos[0] = 0.0;
 		grids[i][j].pos[1] = 0.0;
+		grids[i][j].pos[2] = 0.0;
 	} END_FOR;
 	
 	// Redistance...
-	redistance(tolerance);
+	//redistance(tolerance);
 }
 
 void levelset2D::advect( void (*func)( FLOAT x, FLOAT y, FLOAT &u, FLOAT &v, FLOAT &dt ) ) {	
@@ -455,113 +459,7 @@ static void drawMarchingCube() {
 void levelset2D::display( bool cell_centered ) {	
 	FLOAT w = 1.0/(gn-1);
 
-	// Cell Centered
-	glPushMatrix();
-	if( cell_centered ) {
-		FLOAT s = (gn-1)/(FLOAT)gn;
-		glTranslated( w/2, w/2, 0.0 );
-		glScaled(s,s,s); 
-	}
-	
-	if( show_dist ) {
-		// Paint Distance Field
-		FOR_EVERY_CELL(gn-1) {
-			int quads[] = { i, j, i+1, j, i+1, j+1, i, j+1 };
-			glBegin(GL_QUADS);
-			for( int q=0; q<4; q++ ) {
-				int fi = quads[2*q+0];
-				int fj = quads[2*q+1];
-				FLOAT alpha = grids[fi][fj].known ? 1.0 : 0.0;
-				FLOAT d = grids[fi][fj].dist;
-				FLOAT s = 5.0;
-				glColor4f( s*d*(d>0), 0.0, s*(-d)*(d<0), alpha );
-				glVertex2d( fi*w, fj*w );
-			}
-			glEnd();
-		} END_FOR;
-	}
-	
-	if( show_region ) drawMarchingCube();
-	
-#if 0
-	// Paint Test Quantity
-	FOR_EVERY_CELL(gn-1) {
-		int quads[] = { i, j, i+1, j, i+1, j+1, i, j+1 };
-		glBegin(GL_QUADS);
-		for( int q=0; q<4; q++ ) {
-			int fi = quads[2*q+0];
-			int fj = quads[2*q+1];
-			FLOAT d = grids[fi][fj].dist;
-			FLOAT s = 1.0/max_d;
-			FLOAT q = test_q[fi][fj];
-			glColor4f( 1.0, 1.0, 1.0, q );
-			glVertex2d( fi*w, fj*w );
-		}
-		glEnd();
-	} END_FOR;
-#endif
-	
-	if( show_grid ) {
-		glPointSize(2);
-		// Plot Grid Points
-		FOR_EVERY_CELL(gn) {
-			grids[i][j].dist < 0 ? glColor4f(0.0,0.0,1.0,1.0) : glColor4f(1.0,0.0,0.0,1.0);
-			if( ! grids[i][j].known ) glColor4f(0.5,0.5,0.5,0.5);
-			glBegin(GL_POINTS);
-			glVertex2f(i*w,j*w);
-			glEnd();
-		} END_FOR;
-		glPointSize(1);
-	}
-	
-	// Draw Surface Reference Line
-#if 0
-	FOR_EVERY_CELL(gn) {
-		if( grids[i][j].known ) {
-			FLOAT alpha = 0.5;
-			if( grids[i][j].dist > 0.0 ) glColor4f(1.0,1.0,0.0,alpha);
-			else glColor4f(0.0,1.0,1.0,alpha);
-			
-			FLOAT *pos = grids[i][j].pos;
-			
-			glBegin(GL_LINES);
-			glVertex2f(i*w,j*w);
-			glVertex2f(pos[0],pos[1]);
-			glEnd();
-		}
-	} END_FOR;
-#endif
-	
-#if 0
-	// Draw Gradient Of Distance Field
-	glColor4f(1.0,1.0,1.0,0.5);
-	FOR_EVERY_CELL(gn) {
-		glBegin(GL_LINES);
-		glVertex2f(i*w,j*w);
-		glVertex2f(i*w+grad[0][i][j]*w,j*w+grad[1][i][j]*w);
-		glEnd();
-	} END_FOR;
-#endif
-	
-#if 0
-	glColor4f(1.0,1.0,1.0,1.0);
-	FLOAT p[3][2] = { {0.1,0.1}, {0.4,0.8}, {0.7,0.3} };
-	glBegin(GL_LINE_LOOP);
-	for( int i=0; i<3; i++ ) {
-		glVertex2fv(p[i]);
-	}
-	glEnd();
-	
-	FLOAT x = p[2][0];
-	FLOAT y = p[2][1];
-	intersect( p[0][0], p[0][1], p[1][0], p[1][1], x, y  );
-	glBegin(GL_LINES);
-	glVertex2f( x, y );
-	glVertex2fv(p[2]);
-	glEnd();
-#endif
-	
-	glPopMatrix();
+	drawMarchingCube();
 }
 
 FLOAT levelset2D::getLevelSet( int i, int j ) {

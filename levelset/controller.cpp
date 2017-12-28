@@ -30,40 +30,26 @@
 
 void controller::init( int gn ) {
 	// Turn On Blending
-	glEnable(GL_BLEND);
-	glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+	//glEnable(GL_BLEND);
+	//glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 	
-#if TEST
-	profile::init(gn);
-#else
 	// Initialize Liquid
 	liquid2D::init(gn);
-#endif
 }
-
+/*
 void controller::reshape( int w, int h ) {
 	double margin = 0.02;
 	glViewport(0, 0, w, h);
 	glLoadIdentity();
 	glOrtho(-margin,1.0+margin,-margin,1.0+margin,-1.0,1.0);
 }
-
-void controller::display(GLFWwindow *window) {
-	int width, height;
-	glfwGetWindowSize(window, &width, &height);
-#if TEST
-	profile::display();
-#else
-	liquid2D::display(width, height);
-#endif	
+*/
+void controller::display() {
+	liquid2D::display();
 }
 
 void controller::keyDown( unsigned char key ) {
-#if TEST
-	profile::keyDown(key);
-#else
 	liquid2D::keyDown(key);
-#endif
 }
 
 void controller::mouse( double x, double y, int state ) {

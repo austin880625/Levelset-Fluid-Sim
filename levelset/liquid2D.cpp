@@ -11,6 +11,7 @@
 #include "levelset2D.h"
 #include "solver.h"
 #include "write_bmp.h"
+#include "CubeMarching.hpp"
 
 #define	GRAVITY		9.8
 #define	DT			0.015
@@ -26,7 +27,7 @@ namespace {
 	static char show_region = 1;
 	static char interpMethd = 1;
 	static char do_redistance = 1;
-	static char do_volumeCorrection = 1;
+	static char do_volumeCorrection = 0;
 	static char solver_mode = 2;
 	static FLOAT maxdist = DIST;
 	static FLOAT volume0 = 0.0;
@@ -60,19 +61,20 @@ using namespace std;
 #include <sys/time.h>
 #endif
 
-static bool sphere( FLOAT x, FLOAT y ) {
+static bool sphere( FLOAT x, FLOAT y, FLOAT z ) {
 	switch (reset_count) {
 		case 0:
-			return x < 0.4 && y < 0.6;
+			return x < 0.4 && y < 0.6 && z < 0.4;
 		case 1:
-			return hypot(x-0.5,y-0.8) < 0.15 || y < 0.2;
+			return hypot3(x-0.5,y-0.8,z-0.5) < 0.15 || y < 0.2;
 		case 2:
 			return y < 0.1;
 	}
-	return 0.0;
+	return false;
 }
 
 void liquid2D::init( int n ) {
+	CubeMarching::init();
 	gn = n;
 	if( ! p ) p = alloc3D<FLOAT>(gn);
 	if( ! d ) d = alloc3D<FLOAT>(gn);
@@ -106,8 +108,8 @@ void liquid2D::init( int n ) {
 	interp::setInterpMethod(interpMethd);
 	
 	// Compute Initial Volume
-	volume0 = levelset2D::getVolume();
-	y_volume0 = 0.0;
+	//volume0 = levelset2D::getVolume();
+	//y_volume0 = 0.0;
 	
 	// Remove Images
 	// system( "rm -rf *.bmp" );
@@ -137,10 +139,12 @@ static bool write_frame() {
 	return true;
 }
 */
-static void render(int width, int height) {
+static void render() {
 	// Display LevelSet
-	levelset2D::display(true);
-	
+	CubeMarching::genVertices(A, gn-1, gn-1, gn-1);
+	CubeMarching::draw();
+	//levelset2D::display(true);
+	/*
 	if( show_velocity ) {
 		FLOAT s = 2.0;
 		glColor4d(1.0,1.0,0.0,0.8);
@@ -156,13 +160,9 @@ static void render(int width, int height) {
 			}
 		} END_FOR;
 	}
+	*/
 	
-	int winsize[2] = { width, height };
-	double dw = 1.0/(double)winsize[0];
-	double dh = 1.0/(double)winsize[1];
-	int peny = 20;
-
-	// Display Usage
+		// Display Usage
 	/*
 	glColor4d( 1.0, 1.0, 1.0, 1.0 );
 	for( int j=0; j<10; j++ ) {
@@ -234,22 +234,28 @@ static void markLiquid() {
 
 static void addGravity() {
 	OPENMP_FOR FOR_EVERY_Y_FLOW(gn) {
-		if( j>0 && j<gn-1 && (A[i][j]<0.0 || A[i][j-1]<0.0)) u[1][i][j] += -DT*GRAVITY;
-		else u[1][i][j] = 0.0;
+		if( j>0 && j<gn-1 && (A[i][j][k]<0.0 || A[i][j-1][k]<0.0)) u[1][i][j][k] += -DT*GRAVITY;
+		else u[1][i][j][k] = 0.0;
 	} END_FOR;
 	
 	OPENMP_FOR FOR_EVERY_X_FLOW(gn) {
-		if( i>0 && i<gn-1 && (A[i][j]<0.0 || A[i-1][j]<0.0)) u[0][i][j] += 0.0;
-		else u[0][i][j] = 0.0;
+		if( i>0 && i<gn-1 && (A[i][j][k]<0.0 || A[i-1][j][k]<0.0)) u[0][i][j][k] += 0.0;
+		else u[0][i][j][k] = 0.0;
 	} END_FOR;
+	OPENMP_FOR FOR_EVERY_Z_FLOW(gn) {
+		if( k>0 && k<gn-1 && (A[i][j][k]<0.0 || A[i][j][k-1]<0.0)) u[2][i][j][k] += 0.0;
+		else u[2][i][j][k] = 0.0;
+	} END_FOR;
+
 }
 
 static void computeVolumeError() {
-	FLOAT curVolume = levelset2D::getVolume();
+	//FLOAT curVolume = levelset2D::getVolume();
 	if( ! volume0 || ! do_volumeCorrection || ! curVolume ) {
 		vdiv = 0.0;
 		return;
 	}
+	/*
 	volume_error = volume0-curVolume;
 	
 	FLOAT x = (curVolume - volume0)/volume0;
@@ -258,13 +264,14 @@ static void computeVolumeError() {
 	FLOAT kp = 2.3 / (25.0 * DT);
 	FLOAT ki = kp*kp/16.0;
 	vdiv = -(kp * x + ki * y_volume0) / (x + 1.0);
+	*/
 }
 
 static void comp_divergence() {
-	FLOAT h = 1.0/gn;
+	FLOAT h = 1.0/gn/gn;
 	FOR_EVERY_CELL(gn) {
-		FLOAT div = A[i][j]<0.0 ? (u[0][i+1][j]-u[0][i][j]) + (u[1][i][j+1]-u[1][i][j]) : 0.0;
-		d[i][j] = div/h - vdiv;
+		FLOAT div = A[i][j][k]<0.0 ? (u[0][i+1][j][k]-u[0][i][j][k]) + (u[1][i][j+1][k]-u[1][i][j][k]) + (u[2][i][j][k+1]-u[2][i][j][k]): 0.0;
+		d[i][j][k] = div/h - vdiv;
 	} END_FOR;
 }
 
@@ -307,11 +314,15 @@ static void subtract_pressure() {
 
 static void enforce_boundary() {
 	OPENMP_FOR FOR_EVERY_X_FLOW(gn) {
-		if( i==0 || i==gn ) u[0][i][j] = 0.0;
+		if( i==0 || i==gn ) u[0][i][j][k] = 0.0;
 	} END_FOR;
 	
 	OPENMP_FOR FOR_EVERY_Y_FLOW(gn) {
-		if( j==0 || j==gn ) u[1][i][j] = 0.0;
+		if( j==0 || j==gn ) u[1][i][j][k] = 0.0;
+	} END_FOR;
+
+	OPENMP_FOR FOR_EVERY_Z_FLOW(gn) {
+		if( k==0 || k==gn ) u[2][i][j][k] = 0.0;
 	} END_FOR;
 }
 
@@ -444,13 +455,13 @@ static void setMaxDistOfLevelSet() {
 #endif
 }
 
-void liquid2D::display(int width, int height) {
+void liquid2D::display() {
 	
 	// Mark Liquid Domain
 	markLiquid();
 
 	// Visualize Everything
-	render(width, height);
+	render();
 	
 	// Add Gravity Force
 	addGravity();
@@ -475,6 +486,7 @@ void liquid2D::display(int width, int height) {
 	levelset2D::advect(flow);
 	
 	// Redistancing
+	/*
 	if(do_redistance) {
 		static int wait=0;
 		if(wait++%REDIST==0) {
@@ -482,6 +494,7 @@ void liquid2D::display(int width, int height) {
 			levelset2D::redistance(maxdist);
 		}
 	}
+	*/
 }
 
 void liquid2D::keyDown( char key ) {

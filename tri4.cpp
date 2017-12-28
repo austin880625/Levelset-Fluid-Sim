@@ -7,13 +7,16 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 #include "common/shader.hpp"
-#include "CubeMarching.hpp"
+#include "levelset/utility.h"
+#include "levelset/controller.h"
 
-GLfloat ***sp;
 GLFWwindow *window;
 int screen_width = 1024;
 int screen_height = 600;
+int gn = 100;
+
 using namespace glm;
+
 int main()
 {
 	if(glfwInit()==0)
@@ -43,7 +46,7 @@ int main()
 
 	GLuint programID = LoadShaders( "SimpleVertexShader.vertexshader", "SimpleFragmentShader.fragmentshader" );
 
-	CubeMarching::init();	
+	/*
 	int maxn=129;
 	sp = (GLfloat***)malloc((maxn+1)*sizeof(GLfloat**));sp[maxn]=NULL;
 	for(int i=0; i<maxn; i++){
@@ -63,8 +66,10 @@ int main()
 			}
 		}
 	}
+	*/
+	controller::init(gn);
 
-	glClearColor(0, 0, 0.4f, 0);
+	glClearColor(0, 0, 0, 0);
 	
 	mat4 projection = perspective(radians(45.0f), (float)screen_width/(float)screen_height, 0.1f, 100.0f);	
 	
@@ -76,7 +81,7 @@ int main()
 	do{
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		
-		angle = (angle+2)%360;
+		//angle = (angle+2)%360;
 		mat4 view = lookAt(vec3(15*cos(angle*M_PI/180.0f),3,15*sin(angle*M_PI/180.0f)), vec3(0,0,0), vec3(0,1,0));
 		mat4 model = mat4(1.0f);
 		mat4 mvp = projection*view*model;
@@ -97,18 +102,14 @@ int main()
 			g_vertex_buffer_data[9*i+8] = 0.0f;
 		}
 		*/
-		CubeMarching::genVertices(sp, 14.0f, maxn-1, maxn-1, maxn-1);
 		glUseProgram(programID);
-		CubeMarching::draw();
+		
+		controller::display();
+
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}while( glfwGetKey(window, GLFW_KEY_ESCAPE)!=GLFW_PRESS&&glfwWindowShouldClose(window)==0);
 
-	for(int i=0;sp[i]!=NULL;i++){
-		for(int j=0; sp[i][j]!=NULL; j++){
-			free(sp[i][j]);
-		}
-	}
 	glfwTerminate();
 	return 0;
 }
