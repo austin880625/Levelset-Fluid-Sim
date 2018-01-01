@@ -47,7 +47,7 @@ void controller::reshape( int w, int h ) {
 void controller::display() {
 	liquid2D::display();
 }
-
+/*
 void controller::keyDown( unsigned char key ) {
 	liquid2D::keyDown(key);
 }
@@ -65,15 +65,4 @@ void controller::motion( double x, double y, double dx, double dy ) {
 	liquid2D::motion(x,y,dx,dy);
 #endif	
 }
-
-
-
-
-
-
-
-
-
-
-
-
+*/

@@ -293,6 +293,7 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 		FOR(i,w){
 			FOR(j,h){
 				cubeIndex = 0;
+				//printf("%f\n",grid[i][j][k]);
 				if (grid[i][j][k] < 0.0f) cubeIndex |= 1;
 				if (grid[i+1][j][k] < 0.0f) cubeIndex |= 2;
 				if (grid[i+1][j][k+1] < 0.0f) cubeIndex |= 4;

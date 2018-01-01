@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <assert.h>
 #include "solver.h"
 #include "utility.h"
 
@@ -14,75 +15,87 @@ static char subcell = 0;
 static char solver_mode = 0;
 
 // Clamped Fetch
-static FLOAT x_ref( FLOAT **A, FLOAT **x, int fi, int fj, int i, int j, int n ) {
+static FLOAT x_ref( FLOAT ***A, FLOAT ***x, int fi, int fj, int fk, int i, int j, int k, int n ) {
 	i = min(max(0,i),n-1);
 	j = min(max(0,j),n-1);
-	if( A[i][j] < 0.0 ) return x[i][j];
-	return subcell ? A[i][j]/fmin(1.0e-6,A[fi][fj])*x[fi][fj] : 0.0;
+	k = min(max(0,k),n-1);
+	if( A[i][j][k] < 0.0 ) return x[i][j][k];
+	return subcell ? A[i][j][k]/fmin(1.0e-6,A[fi][fj][fk])*x[fi][fj][fk] : 0.0;
 }
 
 // Ans = Ax
-static void compute_Ax( FLOAT **A, FLOAT **x, FLOAT **ans, int n ) {
+static void compute_Ax( FLOAT ***A, FLOAT ***x, FLOAT ***ans, int n ) {
 	FLOAT h2 = 1.0/(n*n);
 	FOR_EVERY_CELL(n) {
-		if( A[i][j] < 0.0 ) {
-			ans[i][j] = (4.0*x[i][j]-x_ref(A,x,i,j,i+1,j,n)-x_ref(A,x,i,j,i-1,j,n)-x_ref(A,x,i,j,i,j+1,n)-x_ref(A,x,i,j,i,j-1,n))/h2;
+		if( A[i][j][k] < 0.0 ) {
+			ans[i][j][k] = (6.0*x[i][j][k]-x_ref(A,x,i,j,k,i+1,j,k,n)-x_ref(A,x,i,j,k,i-1,j,k,n)-x_ref(A,x,i,j,k,i,j+1,k,n)-x_ref(A,x,i,j,k,i,j-1,k,n)-x_ref(A,x,i,j,k,i,j,k-1,n)-x_ref(A,x,i,j,k,i,j,k+1,n))/h2;
 		} else {
-			ans[i][j] = 0.0;
+			ans[i][j][k] = 0.0;
 		}
 	} END_FOR
 }
 
 // ans = x^T * x
-static FLOAT product( FLOAT **A, FLOAT **x, FLOAT **y, int n ) {
+static FLOAT product( FLOAT ***A, FLOAT ***x, FLOAT ***y, int n ) {
 	FLOAT ans = 0.0;
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
-			if( A[i][j] < 0.0 ) ans += x[i][j]*y[i][j];
+			for( int k=0; k<n; k++){
+				if( A[i][j][k] < 0.0 ) ans += x[i][j][k]*y[i][j][k];
+			}
 		}
 	}
 	return ans;
 }
 
 // x = 0
-static void clear( FLOAT **x, int n ) {
+static void clear( FLOAT ***x, int n ) {
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
-			x[i][j] = 0.0;
+			for(int k=0; k<n; k++){
+				x[i][j][k] = 0.0;
+			}
 		}
 	}
 }
 
-static void flip( FLOAT **x, int n ) {
+static void flip( FLOAT ***x, int n ) {
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
-			x[i][j] = -x[i][j];
+			for(int k=0; k<n; k++){
+				x[i][j][k] = -x[i][j][k];
+			}
 		}
 	}
 }
 
 // x <= y
-static void copy( FLOAT **x, FLOAT **y, int n ) {
+static void copy( FLOAT ***x, FLOAT ***y, int n ) {
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
-			x[i][j] = y[i][j];
+			for(int k=0; k<n; k++){
+				x[i][j][k] = y[i][j][k];
+			}
 		}
 	}
 }
 				 
 // Ans = x + a*y
-static void op( FLOAT **A, FLOAT **x, FLOAT **y, FLOAT **ans, FLOAT a, int n ) {
-	static FLOAT **tmp = alloc2D<FLOAT>(n);
+static void op( FLOAT ***A, FLOAT ***x, FLOAT ***y, FLOAT ***ans, FLOAT a, int n ) {
+	FLOAT ***tmp = alloc3D<FLOAT>(n);
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
-			if( A[i][j] < 0.0 ) tmp[i][j] = x[i][j]+a*y[i][j];
+			for(int k=0; k<n; k++){
+				if( A[i][j][k] < 0.0 ) tmp[i][j][k] = x[i][j][k]+a*y[i][j][k];
+				else tmp[i][j][k] = 0.0;
+			}
 		}
 	}
 	copy(ans,tmp,n);
 }
 
 // r = b - Ax
-static void residual( FLOAT **A, FLOAT **x, FLOAT **b, FLOAT **r, int n ) {
+static void residual( FLOAT ***A, FLOAT ***x, FLOAT ***b, FLOAT ***r, int n ) {
 	compute_Ax(A,x,r,n);
 	op( A, b, r, r, -1.0, n );
 }
@@ -90,13 +103,14 @@ static void residual( FLOAT **A, FLOAT **x, FLOAT **b, FLOAT **r, int n ) {
 static inline FLOAT square( FLOAT a ) {
 	return a*a;
 }
-
+/*
 static FLOAT A_ref( FLOAT **A, int i, int j, int qi, int qj, int n ) {
 	if( i<0 || i>n-1 || j<0 || j>n-1 || A[i][j]>0.0 ) return 0.0;
 	if( qi<0 || qi>n-1 || qj<0 || qj>n-1 || A[qi][qj]>0.0 ) return 0.0;
 	return -1.0;
 }
-
+*/
+/*
 static FLOAT A_diag( FLOAT **A, int i, int j, int n ) {
 	FLOAT diag = 4.0;
 	if( A[i][j] > 0.0 ) return diag;
@@ -111,12 +125,14 @@ static FLOAT A_diag( FLOAT **A, int i, int j, int n ) {
 	}
 	return diag;
 }
-
+*/
+/*
 static FLOAT P_ref( FLOAT **P, int i, int j, int n ) {
 	if( i<0 || i>n-1 || j<0 || j>n-1 ) return 0.0;
 	return P[i][j];
 }
-
+*/
+/*
 static void buildPreconditioner( FLOAT **P, FLOAT **A, int n ) {
 	clear(P,n);
 	FLOAT t = solver_mode == 2 ? 0.97 : 0.0;
@@ -137,13 +153,14 @@ static void buildPreconditioner( FLOAT **P, FLOAT **A, int n ) {
 		}
 	}
 }
+*/
 
-static void applyPreconditioner( FLOAT **z, FLOAT **r, FLOAT **P, FLOAT **A, int n ) {
+static void applyPreconditioner( FLOAT ***z, FLOAT ***r, FLOAT ***P, FLOAT ***A, int n ) {
 	if( solver_mode == 0 ) {
 		copy(z,r,n);
 		return;
 	}
-	
+	/*
 	static FLOAT **q = alloc2D<FLOAT>(n);
 	clear(q,n);
 	
@@ -172,13 +189,15 @@ static void applyPreconditioner( FLOAT **z, FLOAT **r, FLOAT **P, FLOAT **A, int
 			}
 		}
 	}
+	*/
 }
 
-static void conjGrad( FLOAT **A, FLOAT **P, FLOAT **x, FLOAT **b, int n ) {
+static void conjGrad( FLOAT ***A, FLOAT ***P, FLOAT ***x, FLOAT ***b, int n ) {
 	// Pre-allocate Memory
-	static FLOAT **r = alloc2D<FLOAT>(n);
-	static FLOAT **z = alloc2D<FLOAT>(n);
-	static FLOAT **s = alloc2D<FLOAT>(n);
+	//printf("%d",solver_mode);
+	static FLOAT ***r = alloc3D<FLOAT>(n);
+	static FLOAT ***z = alloc3D<FLOAT>(n);
+	static FLOAT ***s = alloc3D<FLOAT>(n);
 	
 	clear(x,n);									// p = 0
 	copy(r,b,n);								// r = b
@@ -186,13 +205,14 @@ static void conjGrad( FLOAT **A, FLOAT **P, FLOAT **x, FLOAT **b, int n ) {
 	copy(s,z,n);								// s = z
 	
 	FLOAT a = product( A, z, r, n );			// a = z . r
-	for( int k=0; k<n*n; k++ ) {
+	for( int k=0; k<50; k++ ) {
 		compute_Ax( A, s, z, n );				// z = applyA(s)
 		FLOAT alpha = a/product( A, z, s, n );	// alpha = a/(z . s)
+		//printf("%f %f\n", a, alpha);
 		op( A, x, s, x, alpha, n );				// p = p + alpha*s
 		op( A, r, z, r, -alpha, n );			// r = r - alpha*z;
 		FLOAT error2 = product( A, r, r, n );	// error2 = r . r
-		if( error2/(n*n) < 1.0e-6 ) break;
+		if( error2/(n*n*n) < 1.0e-6 ) break;
 		applyPreconditioner(z,r,P,A,n);			// Apply Conditioner z = f(r)
 		FLOAT a2 = product( A, z, r, n );		// a2 = z . r
 		FLOAT beta = a2/a;
@@ -201,9 +221,9 @@ static void conjGrad( FLOAT **A, FLOAT **P, FLOAT **x, FLOAT **b, int n ) {
 	}
 }
 
-FLOAT solver::solve( FLOAT **A, FLOAT **x, FLOAT **b, int n, char subcell_aware, char solver_type ) {
-	static FLOAT **r = alloc2D<FLOAT>(n);
-	static FLOAT **P = alloc2D<FLOAT>(n);
+FLOAT solver::solve( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n, char subcell_aware, char solver_type ) {
+	static FLOAT ***r = alloc3D<FLOAT>(n);
+	static FLOAT ***P = alloc3D<FLOAT>(n);
 	clear(r,n);
 	
 	// Save Mode
@@ -214,13 +234,13 @@ FLOAT solver::solve( FLOAT **A, FLOAT **x, FLOAT **b, int n, char subcell_aware,
 	flip(b,n);
 	
 	// Build Modified Incomplete Cholesky Precondioner Matrix
-	if( solver_mode >= 1 ) buildPreconditioner(P,A,n);
+	//if( solver_mode >= 1 ) buildPreconditioner(P,A,n);
 	
 	// Conjugate Gradient Method
 	conjGrad(A,P,x,b,n);
 
 	residual(A,x,b,r,n);
-	FLOAT res = sqrt(product( A, r, r, n ))/(n*n);
-	// printf( "Residual = %e\n", res );
+	FLOAT res = sqrt(product( A, r, r, n ))/(n*n*n);
+	//printf( "Residual = %e\n", res );
 	return res;
 }

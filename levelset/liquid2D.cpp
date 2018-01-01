@@ -25,10 +25,10 @@ namespace {
 	static char show_dist = 0;
 	static char show_grid = 0;
 	static char show_region = 1;
-	static char interpMethd = 1;
+	static char interpMethd = 0;
 	static char do_redistance = 1;
 	static char do_volumeCorrection = 0;
-	static char solver_mode = 2;
+	static char solver_mode = 0;
 	static FLOAT maxdist = DIST;
 	static FLOAT volume0 = 0.0;
 	static FLOAT y_volume0 = 0.0;
@@ -56,17 +56,16 @@ using namespace std;
 #include "glut.h"
 #include <windows.h>
 #else
-#include <GL/gl.h>
 #include <GLFW/glfw3.h>
 #include <sys/time.h>
 #endif
 
 static bool sphere( FLOAT x, FLOAT y, FLOAT z ) {
 	switch (reset_count) {
-		case 0:
-			return x < 0.4 && y < 0.6 && z < 0.4;
 		case 1:
-			return hypot3(x-0.5,y-0.8,z-0.5) < 0.15 || y < 0.2;
+			return x < 0.4 && y < 0.6 && z<0.4;
+		case 0:
+			return hypot3(x-0.5,y-0.8,z-0.3) < 0.05 || y < 0.2;
 		case 2:
 			return y < 0.1;
 	}
@@ -80,7 +79,7 @@ void liquid2D::init( int n ) {
 	if( ! d ) d = alloc3D<FLOAT>(gn);
 	if( ! A ) A = alloc3D<FLOAT>(gn);
 	if( ! u ) {
-		u = new FLOAT **[4];
+		u = new FLOAT ***[4];
 		u[0] = alloc3D<FLOAT>(gn+1);
 		u[1] = alloc3D<FLOAT>(gn+1);
 		u[2] = alloc3D<FLOAT>(gn+1);
@@ -141,7 +140,7 @@ static bool write_frame() {
 */
 static void render() {
 	// Display LevelSet
-	CubeMarching::genVertices(A, gn-1, gn-1, gn-1);
+	CubeMarching::genVertices(A, 2.0f, gn-1, gn-1, gn-1);
 	CubeMarching::draw();
 	//levelset2D::display(true);
 	/*
@@ -251,10 +250,11 @@ static void addGravity() {
 
 static void computeVolumeError() {
 	//FLOAT curVolume = levelset2D::getVolume();
-	if( ! volume0 || ! do_volumeCorrection || ! curVolume ) {
+	if( ! volume0 || ! do_volumeCorrection ){// || ! curVolume ) {
 		vdiv = 0.0;
 		return;
 	}
+	assert(0);
 	/*
 	volume_error = volume0-curVolume;
 	
@@ -278,36 +278,49 @@ static void comp_divergence() {
 static void compute_pressure() {
 	// Clear Pressure
 	FOR_EVERY_CELL(gn) {
-		p[i][j] = 0.0;
+		p[i][j][k] = 0.0;
 	} END_FOR;
 	
-	// Solve Ap = d ( p = Pressure, d = Divergence )
+	//FOR_EVERY_CELL(gn){printf("%d %d %d %f\t%f\n",i,j,k, p[i][j][k], A[i][j][k]);}END_FOR
+	// Solve Ap = d ( p = Pressure, d = Divergence, A is the matrix of descretized laplacian in poisson equation )
 	solver::solve( A, p, d, gn, subcell, solver_mode );
 }
 
 static void subtract_pressure() {
-	FLOAT h = 1.0/gn;
+	FLOAT h = 1.0;
 	OPENMP_FOR FOR_EVERY_X_FLOW(gn) {
 		if( i>0 && i<gn ) {
-			FLOAT pf = p[i][j];
-			FLOAT pb = p[i-1][j];
-			if( subcell && A[i][j] * A[i-1][j] < 0.0 ) {
-				pf = A[i][j] < 0.0 ? p[i][j] : A[i][j]/fmin(1.0e-3,A[i-1][j])*p[i-1][j];
-				pb = A[i-1][j] < 0.0 ? p[i-1][j] : A[i-1][j]/fmin(1.0e-6,A[i][j])*p[i][j];
+			FLOAT pf = p[i][j][k];
+			FLOAT pb = p[i-1][j][k];
+			if( subcell && A[i][j][k] * A[i-1][j][k] < 0.0 ) {
+				pf = A[i][j][k] < 0.0 ? p[i][j][k] : A[i][j][k]/fmin(1.0e-3,A[i-1][j][k])*p[i-1][j][k];
+				pb = A[i-1][j][k] < 0.0 ? p[i-1][j][k] : A[i-1][j][k]/fmin(1.0e-6,A[i][j][k])*p[i][j][k];
 			}
-			u[0][i][j] -= (pf-pb)/h;
+			u[0][i][j][k] -= (pf-pb)/h;
 		}
 	} END_FOR;
 	
 	OPENMP_FOR FOR_EVERY_Y_FLOW(gn) {
 		if( j>0 && j<gn ) {
-			FLOAT pf = p[i][j];
-			FLOAT pb = p[i][j-1];
-			if( subcell && A[i][j] * A[i][j-1] < 0.0 ) {
-				pf = A[i][j] < 0.0 ? p[i][j] : A[i][j]/fmin(1.0e-3,A[i][j-1])*p[i][j-1];
-				pb = A[i][j-1] < 0.0 ? p[i][j-1] : A[i][j-1]/fmin(1.0e-6,A[i][j])*p[i][j];
+			FLOAT pf = p[i][j][k];
+			FLOAT pb = p[i][j-1][k];
+			if( subcell && A[i][j][k] * A[i][j-1][k] < 0.0 ) {
+				pf = A[i][j][k] < 0.0 ? p[i][j][k] : A[i][j][k]/fmin(1.0e-3,A[i][j-1][k])*p[i][j-1][k];
+				pb = A[i][j-1][k] < 0.0 ? p[i][j-1][k] : A[i][j-1][k]/fmin(1.0e-6,A[i][j][k])*p[i][j][k];
 			}
-			u[1][i][j] -= (pf-pb)/h;
+			u[1][i][j][k] -= (pf-pb)/h;
+		}
+	} END_FOR;
+	OPENMP_FOR FOR_EVERY_Z_FLOW(gn) {
+		if( k>0 && k<gn ) {
+			FLOAT pf = p[i][j][k];
+			FLOAT pb = p[i][j][k-1];
+			//printf("%f %f\n",pf, pb);
+			if( subcell && A[i][j][k] * A[i][j][k-1] < 0.0 ) {
+				pf = A[i][j][k] < 0.0 ? p[i][j][k] : A[i][j][k]/fmin(1.0e-3,A[i][j][k-1])*p[i][j][k-1];
+				pb = A[i][j][k-1] < 0.0 ? p[i][j][k-1] : A[i][j][k-1]/fmin(1.0e-6,A[i][j][k])*p[i][j][k];
+			}
+			u[2][i][j][k] -= (pf-pb)/h;
 		}
 	} END_FOR;
 }
@@ -338,69 +351,85 @@ static FLOAT u_ref( int dir, int i, int j, int k ) {
 		return gu[2][max(0,min(gn-1,i))][max(0,min(gn-1,j))][max(0,min(gn,k))];
 }
 
-static void semiLagrangian( FLOAT **d, FLOAT **d0, int width, int height, FLOAT ***u ) {
-	OPENMP_FOR for( int n=0; n<width*height; n++ ) {
+static void semiLagrangian( FLOAT ***d, FLOAT ***d0, int width, int height, int depth, FLOAT ****u ) {
+	OPENMP_FOR for( int n=0; n<width*height*depth; n++ ) {
 		int i = n%width;
-		int j = n/width;
-		d[i][j] = interp::interp( d0, i-gn*u[0][i][j]*DT, j-gn*u[1][i][j]*DT, width, height );
+		int j = (n/width)%height;
+		int k = n/(width*height);
+		d[i][j][k] = interp::interp( d0, i-gn*u[0][i][j][k]*DT, j-gn*u[1][i][j][k]*DT, k-gn*u[2][i][j][k]*DT, width, height, depth );
 	}
 }
 
 // Semi-Lagrangian Advection Method
-static void advect_semiLagrangian( FLOAT ***u, FLOAT **out[2] ) {
+static void advect_semiLagrangian( FLOAT ****u, FLOAT ***out[3] ) {
 	gu = u;
 
-	// Compute Fluid Velocity At Each Staggered Faces
-	static FLOAT **ux[2] = { alloc2D<FLOAT>(gn+1), alloc2D<FLOAT>(gn+1) };
-	static FLOAT **uy[2] = { alloc2D<FLOAT>(gn+1), alloc2D<FLOAT>(gn+1) };
+	// Compute Fluid Velocity At Each Staggered Faces (which should be 3 components)
+	static FLOAT ***ux[3] = { alloc3D<FLOAT>(gn+1), alloc3D<FLOAT>(gn+1), alloc3D<FLOAT>(gn+1) };
+	static FLOAT ***uy[3] = { alloc3D<FLOAT>(gn+1), alloc3D<FLOAT>(gn+1), alloc3D<FLOAT>(gn+1) };
+	static FLOAT ***uz[3] = { alloc3D<FLOAT>(gn+1), alloc3D<FLOAT>(gn+1), alloc3D<FLOAT>(gn+1) };
 	
 	OPENMP_FOR FOR_EVERY_X_FLOW(gn) {
-		ux[0][i][j] = u[0][i][j];
-		ux[1][i][j] = (u_ref(1,i-1,j)+u_ref(1,i,j)+u_ref(1,i-1,j+1)+u_ref(1,i,j+1))/4.0;
+		ux[0][i][j][k] = u[0][i][j][k];
+		ux[1][i][j][k] = (u_ref(1,i-1,j,k)+u_ref(1,i,j,k)+u_ref(1,i-1,j+1,k)+u_ref(1,i,j+1,k))/4.0;
+		ux[2][i][j][k] = (u_ref(2,i,j,k)+u_ref(2,i,j,k+1)+u_ref(2,i-1,j,k)+u_ref(2,i-1,j,j+1))/4.0;
 	} END_FOR;
 	
 	OPENMP_FOR FOR_EVERY_Y_FLOW(gn) {
-		uy[0][i][j] = (u_ref(0,i,j-1)+u_ref(0,i,j)+u_ref(0,i+1,j)+u_ref(0,i+1,j-1))/4.0;
-		uy[1][i][j] = u[1][i][j];
+		uy[0][i][j][k] = (u_ref(0,i,j-1,k)+u_ref(0,i,j,k)+u_ref(0,i+1,j,k)+u_ref(0,i+1,j-1,k))/4.0;
+		uy[1][i][j][k] = u[1][i][j][k];
+		uy[2][i][j][k] = (u_ref(2,i,j-1,k+1)+u_ref(2,i,j,k)+u_ref(2,i,j,k+1)+u_ref(2,i,j-1,k))/4.0;
 	} END_FOR;
 	
+	OPENMP_FOR FOR_EVERY_Z_FLOW(gn) {
+		uz[0][i][j][k] = (u_ref(0,i,j,k)+u_ref(0,i+1,j,k)+u_ref(0,i,j,k-1)+u_ref(0,i+1,j,k-1))/4.0;
+		uz[1][i][j][k] = (u_ref(1,i,j,k)+u_ref(1,i,j+1,k)+u_ref(1,i,j,k-1)+u_ref(1,i,j+1,k-1))/4.0;
+		uz[2][i][j][k] = u[2][i][j][k];
+	} END_FOR;
 	// BackTrace X Flow
-	semiLagrangian( out[0], u[0], gn+1, gn, ux );
+	semiLagrangian( out[0], u[0], gn+1, gn, gn, ux );
 		
 	// BackTrace Y Flow
-	semiLagrangian( out[1], u[1], gn, gn+1, uy );
+	semiLagrangian( out[1], u[1], gn, gn+1, gn, uy );
+	
+	// BackTrace Z Flow
+	semiLagrangian( out[2], u[2], gn, gn, gn+1, uz );
 }
 
 static void advect_fluid() {	
-	static FLOAT **u_swap[2] = { NULL, NULL };
+	static FLOAT ***u_swap[3] = { NULL, NULL, NULL };
 	if( ! u_swap[0] ) {
-		u_swap[0] = alloc2D<FLOAT>(gn+1);
-		u_swap[1] = alloc2D<FLOAT>(gn+1);
+		u_swap[0] = alloc3D<FLOAT>(gn+1);
+		u_swap[1] = alloc3D<FLOAT>(gn+1);
+		u_swap[2] = alloc3D<FLOAT>(gn+1);
 	}
 	
 	advect_semiLagrangian( u, u_swap );
 
 	FOR_EVERY_X_FLOW(gn) {
-		u[0][i][j] = u_swap[0][i][j];
+		u[0][i][j][k] = u_swap[0][i][j][k];
 	} END_FOR;
 	FOR_EVERY_Y_FLOW(gn) {
-		u[1][i][j] = u_swap[1][i][j];
+		u[1][i][j][k] = u_swap[1][i][j][k];
+	} END_FOR;
+	FOR_EVERY_Z_FLOW(gn) {
+		u[2][i][j][k] = u_swap[2][i][j][k];
 	} END_FOR;
 }
 
 static void extrapolateVelocity() {
-	static char **region = alloc2D<char>(gn);
-	static FLOAT **q = alloc2D<FLOAT>(gn);
+	static char ***region = alloc3D<char>(gn);
+	static FLOAT ***q = alloc3D<FLOAT>(gn);
 
 	// Map To LevelSet (X Direction)
 	OPENMP_FOR FOR_EVERY_CELL(gn) {
-		if( i<gn-1 && A[i][j]<0.0 ) {
-			region[i][j] = 1;
-			q[i][j] = (u[0][i][j]+u[0][i+1][j])*0.5;
+		if( i<gn-1 && A[i][j][k]<0.0 ) {
+			region[i][j][k] = 1;
+			q[i][j][k] = (u[0][i][j][k]+u[0][i+1][j][k])*0.5;
 		}
 		else {
-			region[i][j] = 0;
-			q[i][j] = 0.0;
+			region[i][j][k] = 0;
+			q[i][j][k] = 0.0;
 		}
 	} END_FOR;
 	
@@ -409,17 +438,18 @@ static void extrapolateVelocity() {
 	
 	// Map Back (X Direction)
 	OPENMP_FOR FOR_EVERY_X_FLOW(gn) {
-		if( i>0 && i<gn && (A[i][j]>0.0 || A[i-1][j]>0.0) ) u[0][i][j] = (q[i][j]+q[i-1][j])*0.5;
+		if( i>0 && i<gn && (A[i][j][k]>0.0 || A[i-1][j][k]>0.0) ) u[0][i][j][k] = (q[i][j][k]+q[i-1][j][k])*0.5;
 	} END_FOR;
 	
 	// Map To LevelSet (Y Direction)
 	OPENMP_FOR FOR_EVERY_CELL(gn) {
-		if( j<gn-1 && A[i][j]<0.0 ) {
-			region[i][j] = 1;
-			q[i][j] = (u[1][i][j]+u[1][i][j+1])*0.5;
-		} else {
-			region[i][j] = 0;
-			q[i][j] = 0.0;
+		if( j<gn-1 && A[i][j][k]<0.0 ) {
+			region[i][j][k] = 1;
+			q[i][j][k] = (u[1][i][j][k]+u[1][i][j+1][k])*0.5;
+		}
+		else {
+			region[i][j][k] = 0;
+			q[i][j][k] = 0.0;
 		}
 	} END_FOR;
 	
@@ -428,17 +458,40 @@ static void extrapolateVelocity() {
 	
 	// Map Back (Y Direction)
 	OPENMP_FOR FOR_EVERY_Y_FLOW(gn) {
-		if( j>0 && j<gn && (A[i][j]>0.0 || A[i][j-1]>0.0) ) u[1][i][j] = (q[i][j]+q[i][j-1])*0.5;
+		if( j>0 && j<gn && (A[i][j][k]>0.0 || A[i][j-1][k]>0.0) ) u[1][i][j][k] = (q[i][j][k]+q[i][j-1][k])*0.5;
+	} END_FOR;
+
+	// Map To LevelSet (Z Direction)
+	OPENMP_FOR FOR_EVERY_CELL(gn) {
+		if( k<gn-1 && A[i][j][k]<0.0 ) {
+			region[i][j][k] = 1;
+			q[i][j][k] = (u[2][i][j][k]+u[2][i][j][k+1])*0.5;
+		}
+		else {
+			region[i][j][k] = 0;
+			q[i][j][k] = 0.0;
+		}
+	} END_FOR;
+	
+	// Extrapolate
+	levelset2D::extrapolate( q, region );
+	
+	// Map Back (Z Direction)
+	OPENMP_FOR FOR_EVERY_Z_FLOW(gn) {
+		if( k>0 && k<gn && (A[i][j][k]>0.0 || A[i][j][k-1]>0.0) ) u[2][i][j][k] = (q[i][j][k]+q[i][j][k-1])*0.5;
 	} END_FOR;
 }
 
-static void flow( FLOAT x, FLOAT y, FLOAT &uu, FLOAT &vv, FLOAT &dt ) {
+static void flow( FLOAT x, FLOAT y, FLOAT z, FLOAT &uu, FLOAT &vv, FLOAT &ww, FLOAT &dt ) {
 	x = (gn-1)*fmin(1.0,fmax(0.0,x))+0.5;
 	y = (gn-1)*fmin(1.0,fmax(0.0,y))+0.5;
+	z = (gn-1)*fmin(1.0,fmax(0.0,z))+0.5;
 	int i = x;
 	int j = y;
-	uu = (1.0-(x-i))*u[0][i][j] + (x-i)*u[0][i+1][j];
-	vv = (1.0-(y-j))*u[1][i][j] + (y-j)*u[1][i][j+1];
+	int k = z;
+	uu = (1.0-(x-i))*u[0][i][j][k] + (x-i)*u[0][i+1][j][k];
+	vv = (1.0-(y-j))*u[1][i][j][k] + (y-j)*u[1][i][j+1][k];
+	ww = (1.0-(z-k))*u[2][i][j][k] + (z-k)*u[2][i][j][k+1];
 	dt = DT;
 }
 
@@ -459,31 +512,40 @@ void liquid2D::display() {
 	
 	// Mark Liquid Domain
 	markLiquid();
-
+	//FOR_EVERY_CELL(gn){printf("%d %d %d %f\n",i,j,k, p[i][j][k]);}END_FOR
+	//puts("markLiquid");
 	// Visualize Everything
+	//printf("%f \n",A[3][3][3]);
 	render();
-	
+	//puts("render");
+	//getchar();
 	// Add Gravity Force
+	
 	addGravity();
 	
+	//puts("addGravity");
 	// Compute Volume Error
 	computeVolumeError();
 	
 	// Solve Fluid
 	enforce_boundary();
 	comp_divergence();
+	//puts("computepressure");
 	compute_pressure();
+	//FOR_EVERY_CELL(gn){printf("%d %d %d %f\n",i,j,k, p[i][j][k]);}END_FOR
 	subtract_pressure();
 	enforce_boundary();
 	
 	// Extrapolate Quantity
 	extrapolateVelocity();
 	
+
 	// Advect Flow
 	advect_fluid();
 	
 	// Advect
 	levelset2D::advect(flow);
+	//getchar();
 	
 	// Redistancing
 	/*
@@ -496,7 +558,7 @@ void liquid2D::display() {
 	}
 	*/
 }
-
+/*
 void liquid2D::keyDown( char key ) {
 	switch( 'a'+key-'A' ) {
 		case 'r':
@@ -547,7 +609,8 @@ void liquid2D::keyDown( char key ) {
 	levelset2D::setVisibility( show_grid, show_dist, show_region );
 	interp::setInterpMethod(interpMethd);
 }
-
+*/
+/*
 static bool moved = false;
 void liquid2D::mouse( FLOAT x, FLOAT y, int state ) {
 	if( state ) {
@@ -597,3 +660,4 @@ void liquid2D::motion( FLOAT x, FLOAT y, FLOAT dx, FLOAT dy ) {
 	u[1][i][j+1] += s*dy;
 	moved = true;
 }
+*/

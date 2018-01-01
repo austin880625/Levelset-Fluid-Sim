@@ -30,8 +30,8 @@ namespace {
 		char known;
 		char estimated;
 		FLOAT dist;
-		FLOAT pos[2];
-		int gp[2];
+		//FLOAT pos[3];
+		int gp[3];
 	} grid;
 	grid *** grids = NULL;
 	FLOAT *** grad[3] = { NULL, NULL, NULL };
@@ -66,7 +66,7 @@ void levelset2D::init( int n ) {
 		grad[0][i][j][k] = grad[1][i][j][k] = grad[2][i][j][k] = 0.0;
 	} END_FOR;
 }
-
+/*
 // Helper Function Used In FastMarch()
 static bool update_distance( int i, int j, FLOAT pos[2], FLOAT &dist ) {
 	FLOAT x = i/(FLOAT)(gn-1);
@@ -96,7 +96,8 @@ static bool update_distance( int i, int j, FLOAT pos[2], FLOAT &dist ) {
 	}
 	return updated;
 }
-
+*/
+/*
 static void fastMarch( FLOAT tolerance ) {
 	// Unknowns
 	grid_queue unknowns;
@@ -187,11 +188,11 @@ static void fastMarch( FLOAT tolerance ) {
 	}
 #endif
 }
-
+*/
 inline int clamp( int a ) {
 	return max(min(a,gn-1),0);
 }
-
+/*
 static void computeDistGradient() {
 	FOR_EVERY_CELL(gn) {
 		grad[0][i][j] = grad[1][i][j] = 0.0;
@@ -208,24 +209,20 @@ static void computeDistGradient() {
 		}
 	} END_FOR;
 }
-
-inline FLOAT sd( int i, int j ) {
-	return (i>=0 && i<gn && j>=0 && j<gn) ? grids[i][j].dist : 1.0;
-}
-
-void levelset2D::extrapolate( FLOAT **q, char **region ) {	
+*/
+void levelset2D::extrapolate( FLOAT ***q, char ***region ) {	
 	// Unknowns
 	grid_queue unknowns;
-	
+
 	// Computed Field
-	static char **computed = alloc2D<char>(gn);
+	static char ***computed = alloc3D<char>(gn);
 	
 	// Push
 	FOR_EVERY_CELL(gn) {
-		if( ! region[i][j] && grids[i][j].known ) {
-			unknowns.push(&grids[i][j]);
+		if( ! region[i][j][k] && grids[i][j][k].known ) {
+			unknowns.push(&grids[i][j][k]);
 		}
-		computed[i][j] = region[i][j];
+		computed[i][j][k] = region[i][j][k];
 	} END_FOR;
 
 	// While Unknowns Exists
@@ -234,28 +231,31 @@ void levelset2D::extrapolate( FLOAT **q, char **region ) {
 		grid *mingrid = unknowns.top();
 		int i = mingrid->gp[0];
 		int j = mingrid->gp[1];
+		int k = mingrid->gp[2];
 		
 		int sum = 0;
 		FLOAT sumq = 0.0;
-		int query[][2] = { {i+1,j},{i-1,j},{i,j+1},{i,j-1},{i-1,j-1},{i-1,j+1},{i+1,j-1},{i+1,j+1} };
-		for( int nq=0; nq<8; nq++ ) {
-			int qi = query[nq][0];
-			int qj = query[nq][1];
-			if( qi>=0 && qi<gn && qj>=0 && qj<gn ) {
-				if( computed[qi][qj] ) {
-					sumq += q[qi][qj];
-					sum ++;
+		for( int qi=i-1; qi<=i+1; qi++ ) {
+			for( int qj=j-1; qj<=j+1; qj++ ){
+				for( int qk=k-1; qk<=k+1; qk++ ){
+					if(qi == i && qj == j && qk == k)continue;
+					if( qi>=0 && qi<gn && qj>=0 && qj<gn && qk>=0 && qk<gn ) {
+						if( computed[qi][qj][qk] ) {
+							sumq += q[qi][qj][qk];
+							sum ++;
+						}
+					}
 				}
 			}
 		}
 		if( sum ) {
-			q[i][j] = sumq / sum;
+			q[i][j][k] = sumq / sum;
 		}
 		unknowns.pop();
-		computed[i][j] = 1;
+		computed[i][j][k] = 1;
 	}
 }
-
+/*
 static void intersect( FLOAT x1, FLOAT y1, FLOAT x2, FLOAT y2, FLOAT &x, FLOAT &y  ) {
 	FLOAT d = hypot2(x2-x1,y2-y1);
 	FLOAT u = ((x-x1)*(x2-x1) + (y-y1)*(y2-y1))/d;
@@ -263,7 +263,8 @@ static void intersect( FLOAT x1, FLOAT y1, FLOAT x2, FLOAT y2, FLOAT &x, FLOAT &
 	x = x1 + u*(x2-x1);
 	y = y1 + u*(y2-y1);
 }
-
+*/
+/*
 void levelset2D::redistance( FLOAT tolerance ) {
 	FLOAT w = 1.0/(gn-1);
 	
@@ -352,7 +353,7 @@ void levelset2D::redistance( FLOAT tolerance ) {
 	extrapolate( test_q, region );
 #endif
 }
-
+*/
 void levelset2D::buildLevelset( bool (*func)(FLOAT x, FLOAT y, FLOAT z), FLOAT tolerance ) {
 	// Initialize Distances
 	OPENMP_FOR FOR_EVERY_CELL(gn) {
@@ -363,56 +364,59 @@ void levelset2D::buildLevelset( bool (*func)(FLOAT x, FLOAT y, FLOAT z), FLOAT t
 		FLOAT sy = y;
 		FLOAT sz = z;
 		bool hit = func(sx,sy,sz);
-		grids[i][j].known = true;
-		grids[i][j].dist = hit ? -1.0 : 1.0;
-		grids[i][j].pos[0] = 0.0;
-		grids[i][j].pos[1] = 0.0;
-		grids[i][j].pos[2] = 0.0;
+		grids[i][j][k].known = true;
+		grids[i][j][k].dist = hit ? -1.0 : 1.0;
+		//grids[i][j].pos[0] = 0.0;
+		//grids[i][j].pos[1] = 0.0;
+		//grids[i][j].pos[2] = 0.0;
 	} END_FOR;
 	
 	// Redistance...
 	//redistance(tolerance);
 }
 
-void levelset2D::advect( void (*func)( FLOAT x, FLOAT y, FLOAT &u, FLOAT &v, FLOAT &dt ) ) {	
-	static FLOAT ** source_dists = alloc2D<FLOAT>(gn);
-	static FLOAT ** swap_dists = alloc2D<FLOAT>(gn);
+void levelset2D::advect( void (*func)( FLOAT x, FLOAT y, FLOAT z, FLOAT &u, FLOAT &v, FLOAT &w, FLOAT &dt ) ) {	
+	static FLOAT *** source_dists = alloc3D<FLOAT>(gn);
+	static FLOAT *** swap_dists = alloc3D<FLOAT>(gn);
 	
 	// Copy Dists
 	OPENMP_FOR FOR_EVERY_CELL(gn) {
-		source_dists[i][j] = grids[i][j].dist;
+		source_dists[i][j][k] = grids[i][j][k].dist;
 	} END_FOR;
 	
 	// Advect
 	FLOAT w = 1.0/(gn-1);
 	OPENMP_FOR FOR_EVERY_CELL(gn) {
-		FLOAT x, y;
-		FLOAT u, v, dt;
+		FLOAT x, y, z;
+		FLOAT u, v, ww, dt;
 		x = i*w;
 		y = j*w;
-		func( x, y, u, v, dt );
+		z = k*w;
+		func( x, y, z, u, v, ww, dt );
 		// Semi-Lagragian
 		x -= dt*u;
 		y -= dt*v;
+		z -= dt*ww;
 		x = fmin(1.0,fmax(0.0,x));
 		y = fmin(1.0,fmax(0.0,y));
+		z = fmin(1.0,fmax(0.0,z));
 		// Interpolate Dists
-		if( grids[(int)((gn-1)*x)][(int)((gn-1)*y)].known ) {
-			swap_dists[i][j] = y<1.0 ? interp::interp( source_dists, (gn-1)*x, (gn-1)*y, gn, gn ) : 1.0;
+		if( grids[(int)((gn-1)*x)][(int)((gn-1)*y)][(int)((gn-1)*z)].known ) {
+			swap_dists[i][j][k] = y<1.0 ? interp::interp( source_dists, (gn-1)*x, (gn-1)*y, (gn-1)*z, gn, gn, gn ) : 1.0;
 		} else {
-			swap_dists[i][j] = source_dists[i][j];
+			swap_dists[i][j][k] = source_dists[i][j][k];
 		}
 	} END_FOR;
 	
 	// Swap
 	FOR_EVERY_CELL(gn) {
-		grids[i][j].dist = swap_dists[i][j];
+		grids[i][j][k].dist = swap_dists[i][j][k];
 	} END_FOR;
 }
 
 void levelset2D::keyDown( char key ) {
 }
-
+/*
 static void calcMarchingPoints( int i, int j, FLOAT p[8][2], int &pnum ) {
 	pnum = 0;
 	FLOAT w = 1.0/(gn-1);
@@ -455,24 +459,25 @@ static void drawMarchingCube() {
 		glEnd();
 	} END_FOR;
 }
-
+*/
+/*
 void levelset2D::display( bool cell_centered ) {	
 	FLOAT w = 1.0/(gn-1);
 
 	drawMarchingCube();
 }
-
-FLOAT levelset2D::getLevelSet( int i, int j ) {
-	if( i<0 || i>gn-1 || j<0 || j>gn-1 ) return 1.0;
-	return grids[i][j].dist;
+*/
+FLOAT levelset2D::getLevelSet( int i, int j, int k ) {
+	if( i<0 || i>gn-1 || j<0 || j>gn-1 || k<0 || k>gn-1 ) return 1.0;
+	return grids[i][j][k].dist;
 }
 
-void levelset2D::getLevelSet( FLOAT **dists ) {
+void levelset2D::getLevelSet( FLOAT ***dists ) {
 	OPENMP_FOR FOR_EVERY_CELL(gn) {
-		dists[i][j] = grids[i][j].known ? grids[i][j].dist : 1.0;
+		dists[i][j][k] = grids[i][j][k].known ? grids[i][j][k].dist : 1.0;
 	} END_FOR;
 }
-
+/*
 FLOAT levelset2D::getVolume() {
 	FLOAT volume = 0.0;
 	FOR_EVERY_CELL(gn-1) {
@@ -486,10 +491,10 @@ FLOAT levelset2D::getVolume() {
 	
 	return volume*0.5;
 }
-
-void levelset2D::setLevelSet( int i, int j, FLOAT d ) {
-	grids[i][j].dist = d;
-	grids[i][j].known = true;
+*/
+void levelset2D::setLevelSet( int i, int j, int k, FLOAT d ) {
+	grids[i][j][k].dist = d;
+	grids[i][j][k].known = true;
 }
 
 void levelset2D::setVisibility( bool grid, bool dist, bool region ) {

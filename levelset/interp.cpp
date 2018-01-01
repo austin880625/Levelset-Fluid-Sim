@@ -4,8 +4,8 @@
 
 #include "interp.h"
 
-static int method = 1;
-
+static int method = 0;
+/*
 static FLOAT clamp( FLOAT v, FLOAT min, FLOAT max ) {
 	if( v < min ) return min;
 	if( v > max ) return max;
@@ -62,24 +62,27 @@ FLOAT interp::spline( FLOAT **d, FLOAT x, FLOAT y, int w, int h ) {
 	for( int j=0; j<4; j++ ) xn[j] = spline_cubic( &f[4*j], x - (int)x );	
 	return spline_cubic( xn, y - (int)y );
 }
-
-FLOAT interp::linear ( FLOAT **d, FLOAT x, FLOAT y, int w, int h ) {
+*/
+FLOAT interp::linear ( FLOAT ***d, FLOAT x, FLOAT y, FLOAT z, int w, int h, int dep ) {
 	x = fmax(0.0,fmin(w,x));
 	y = fmax(0.0,fmin(h,y));
+	z = fmax(0.0,fmin(dep,z));
 	int i = min(x,w-2);
 	int j = min(y,h-2);
+	int k = min(z,dep-2);
 	
-	return ((i+1-x)*d[i][j]+(x-i)*d[i+1][j])*(j+1-y) + ((i+1-x)*d[i][j+1]+(x-i)*d[i+1][j+1])*(y-j);
+	//return ( ((i+1-x)*d[i][j][k]+(x-i)*d[i+1][j][k])*(j+1-y) + ((i+1-x)*d[i][j+1][k]+(x-i)*d[i+1][j+1][k])*(y-j) )*(k+1-z) + ( ((i+1-x)*d[i][j][k+1]+(x-i)*d[i+1][j][k+1])*(j+1-y) + ((i+1-x)*d[i][j+1][k+1]+(x-i)*d[i+1][j+1][k+1])*(y-j) )*(z-k);
+	return ( ((k+1-z)*d[i][j][k]+(z-k)*d[i][j][k+1])*(j+1-y) + ((k+1-z)*d[i][j+1][k]+(z-k)*d[i][j+1][k+1])*(y-j) )*(i+1-x) + ( ((k+1-z)*d[i+1][j][k]+(z-k)*d[i+1][j][k+1])*(j+1-y) + ((k+1-z)*d[i+1][j+1][k]+(z-k)*d[i+1][j+1][k+1])*(y-j) )*(x-i);
 }
 
-FLOAT interp::interp ( FLOAT **d, FLOAT x, FLOAT y, int w, int h ) {
+FLOAT interp::interp ( FLOAT ***d, FLOAT x, FLOAT y, FLOAT z, int w, int h, int dep ) {
 	FLOAT r = 0.0;
 	switch (method) {
 		case 0:
-			r = linear(d,x,y,w,h);
+			r = linear(d,x,y,z,w,h,dep);
 			break;
 		case 1:
-			r = spline(d,x,y,w,h);
+			//r = spline(d,x,y,w,h);
 			break;
 	} 
 	return r;

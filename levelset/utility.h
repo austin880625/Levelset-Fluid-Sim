@@ -13,7 +13,7 @@
 //#define FOR_EVERY_Y_FLOW(N)	for( int yn=0; yn<(N+1)*(N); yn++ ) { int i=yn%(N); int j=yn/(N);
 #define FOR_EVERY_X_FLOW(N)	for( int xn=0; xn<(N+1)*(N)*(N); xn++ ) { int i=xn%(N+1); int j=(xn/(N+1))%N; int k=xn/((N+1)*(N));
 #define FOR_EVERY_Y_FLOW(N)	for( int yn=0; yn<(N+1)*(N)*(N); yn++ ) { int i=yn%(N); int j=(yn/(N))%(N+1); int k=yn/((N+1)*(N));
-#define FOR_EVERY_Z_FLOW(N)	for( int zn=0; zn<(N+1)*(N)*(N); zn++ ) { int i=zn%(N); int j=(yn/(N))%N; int k=zn/((N)*(N));
+#define FOR_EVERY_Z_FLOW(N)	for( int zn=0; zn<(N+1)*(N)*(N); zn++ ) { int i=zn%(N); int j=(zn/(N))%N; int k=zn/((N)*(N));
 
 #define FOR_EVERY_CELL(N)	for( int ci=0; ci<(N)*(N)*(N); ci++ ) { int i=ci%(N); int j=(ci/(N))%N; int k=ci/(N*N);
 #define END_FOR }
@@ -33,7 +33,7 @@
 #define OPENMP_FOR_P
 #endif
 
-template <class T> T ** alloc3D( int n ) {
+template <class T> T *** alloc3D( int n ) {
 	T ***ptr = new T **[n+1];
 	for( int i=0; i<n; i++ ) {
 		ptr[i] = new T *[n+1];
