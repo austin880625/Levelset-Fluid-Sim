@@ -82,7 +82,7 @@ static void copy( FLOAT ***x, FLOAT ***y, int n ) {
 				 
 // Ans = x + a*y
 static void op( FLOAT ***A, FLOAT ***x, FLOAT ***y, FLOAT ***ans, FLOAT a, int n ) {
-	FLOAT ***tmp = alloc3D<FLOAT>(n);
+	static FLOAT ***tmp = alloc3D<FLOAT>(n);
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
 			for(int k=0; k<n; k++){
