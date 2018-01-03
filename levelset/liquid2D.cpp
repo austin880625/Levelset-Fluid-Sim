@@ -10,7 +10,6 @@
 #include "interp.h"
 #include "levelset2D.h"
 #include "solver.h"
-#include "write_bmp.h"
 #include "CubeMarching.hpp"
 
 #define	GRAVITY		9.8
@@ -269,6 +268,7 @@ static void computeVolumeError() {
 
 static void comp_divergence() {
 	FLOAT h = 1.0/gn/gn;
+#pragma omp parallel for
 	FOR_EVERY_CELL(gn) {
 		FLOAT div = A[i][j][k]<0.0 ? (u[0][i+1][j][k]-u[0][i][j][k]) + (u[1][i][j+1][k]-u[1][i][j][k]) + (u[2][i][j][k+1]-u[2][i][j][k]): 0.0;
 		d[i][j][k] = div/h - vdiv;
@@ -277,6 +277,7 @@ static void comp_divergence() {
 
 static void compute_pressure() {
 	// Clear Pressure
+#pragma omp parallel for
 	FOR_EVERY_CELL(gn) {
 		p[i][j][k] = 0.0;
 	} END_FOR;

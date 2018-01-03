@@ -26,6 +26,7 @@ static FLOAT x_ref( FLOAT ***A, FLOAT ***x, int fi, int fj, int fk, int i, int j
 // Ans = Ax
 static void compute_Ax( FLOAT ***A, FLOAT ***x, FLOAT ***ans, int n ) {
 	FLOAT h2 = 1.0/(n*n);
+#pragma omp parallel for
 	FOR_EVERY_CELL(n) {
 		if( A[i][j][k] < 0.0 ) {
 			ans[i][j][k] = (6.0*x[i][j][k]-x_ref(A,x,i,j,k,i+1,j,k,n)-x_ref(A,x,i,j,k,i-1,j,k,n)-x_ref(A,x,i,j,k,i,j+1,k,n)-x_ref(A,x,i,j,k,i,j-1,k,n)-x_ref(A,x,i,j,k,i,j,k-1,n)-x_ref(A,x,i,j,k,i,j,k+1,n))/h2;
@@ -38,6 +39,7 @@ static void compute_Ax( FLOAT ***A, FLOAT ***x, FLOAT ***ans, int n ) {
 // ans = x^T * x
 static FLOAT product( FLOAT ***A, FLOAT ***x, FLOAT ***y, int n ) {
 	FLOAT ans = 0.0;
+#pragma omp parallel for reduction(+:ans)
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
 			for( int k=0; k<n; k++){
@@ -50,6 +52,7 @@ static FLOAT product( FLOAT ***A, FLOAT ***x, FLOAT ***y, int n ) {
 
 // x = 0
 static void clear( FLOAT ***x, int n ) {
+#pragma omp parallel for
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
 			for(int k=0; k<n; k++){
@@ -60,6 +63,7 @@ static void clear( FLOAT ***x, int n ) {
 }
 
 static void flip( FLOAT ***x, int n ) {
+#pragma omp parallel for
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
 			for(int k=0; k<n; k++){
@@ -71,6 +75,7 @@ static void flip( FLOAT ***x, int n ) {
 
 // x <= y
 static void copy( FLOAT ***x, FLOAT ***y, int n ) {
+#pragma omp parallel for
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
 			for(int k=0; k<n; k++){
@@ -82,7 +87,8 @@ static void copy( FLOAT ***x, FLOAT ***y, int n ) {
 				 
 // Ans = x + a*y
 static void op( FLOAT ***A, FLOAT ***x, FLOAT ***y, FLOAT ***ans, FLOAT a, int n ) {
-	FLOAT ***tmp = alloc3D<FLOAT>(n);
+	static FLOAT ***tmp = alloc3D<FLOAT>(n);
+#pragma omp parallel for
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
 			for(int k=0; k<n; k++){
@@ -205,7 +211,7 @@ static void conjGrad( FLOAT ***A, FLOAT ***P, FLOAT ***x, FLOAT ***b, int n ) {
 	copy(s,z,n);								// s = z
 	
 	FLOAT a = product( A, z, r, n );			// a = z . r
-	for( int k=0; k<50; k++ ) {
+	for( int k=0; k<200; k++ ) {
 		compute_Ax( A, s, z, n );				// z = applyA(s)
 		FLOAT alpha = a/product( A, z, s, n );	// alpha = a/(z . s)
 		//printf("%f %f\n", a, alpha);

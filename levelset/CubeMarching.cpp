@@ -4,8 +4,9 @@ namespace {
 	const int MAX_VERTEX = MAX_LENGTH*MAX_LENGTH*(MAX_LENGTH-1)*3;
 	static GLuint vertexbuffer;
 	static GLuint normalbuffer;
-	std::vector<glm::vec3> g_vertex;
-	std::vector<glm::vec3> g_normal;
+	std::vector<glm::vec3> g_vertex[MAX_THREAD];
+	std::vector<glm::vec3> g_normal[MAX_THREAD];
+	static unsigned int buffer_offset[MAX_THREAD];
 	const static GLfloat dx[12] = {0.5f, 1.0f, 0.5f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f};
 	const static GLfloat dy[12] = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.5f, 0.5f, 0.5f, 0.5f};
 	const static GLfloat dz[12] = {0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 0.0f, 1.0f, 1.0f};
@@ -270,8 +271,8 @@ namespace {
 }
 
 void CubeMarching::init(){
-	g_vertex.clear();
-	g_normal.clear();
+	//g_vertex.clear();
+	//g_normal.clear();
 	glGenBuffers(1, &vertexbuffer);
 	glGenBuffers(1, &normalbuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
@@ -283,16 +284,19 @@ void CubeMarching::init(){
 #define FOR(i,N) for(int i=0;i<N;i++)
 void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, int d)
 {
-	static glm::vec3 v1, v2;
-	static int cubeIndex;
 	static GLfloat sx = length/w, sy = length/h, sz = length/d;
-	g_vertex.clear();
-	g_normal.clear();
+	for(int i=0; i<MAX_THREAD; i++){
+		g_vertex[i].clear();
+		g_normal[i].clear();
+		buffer_offset[i] = 0;
+	}
 	//enumerating by the order of depth
+#pragma omp parallel for
 	FOR(k,d){
+		int id = omp_get_thread_num();
 		FOR(i,w){
 			FOR(j,h){
-				cubeIndex = 0;
+				int cubeIndex = 0;
 				//printf("%f\n",grid[i][j][k]);
 				if (grid[i][j][k] < 0.0f) cubeIndex |= 1;
 				if (grid[i+1][j][k] < 0.0f) cubeIndex |= 2;
@@ -304,15 +308,15 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 				if (grid[i][j+1][k+1] < 0.0f) cubeIndex |= 128;
 
 				for(int t=0; triTable[cubeIndex][t] != -1; t++){
-					g_vertex.push_back(glm::vec3( -length/2+sx*(i+dx[triTable[cubeIndex][t]]), -length/2+sy*(j+dy[triTable[cubeIndex][t]]), -length/2+sz*(k+dz[triTable[cubeIndex][t]]) ));
-					if(g_vertex.size()%3==0){
-						v1 = g_vertex.back() - g_vertex[g_vertex.size()-3];
-						v2 = g_vertex[g_vertex.size()-2] - g_vertex.back();
+					g_vertex[id].push_back(glm::vec3( -length/2+sx*(i+dx[triTable[cubeIndex][t]]), -length/2+sy*(j+dy[triTable[cubeIndex][t]]), -length/2+sz*(k+dz[triTable[cubeIndex][t]]) ));
+					if(g_vertex[id].size()%3==0){
+						glm::vec3 v1 = g_vertex[id].back() - g_vertex[id][g_vertex[id].size()-3];
+						glm::vec3 v2 = g_vertex[id][g_vertex[id].size()-2] - g_vertex[id].back();
 						glm::vec3 norm = cross(v2,v1);
 						//printf("%f\n",glm::dot(glm::normalize(norm),glm::normalize(glm::vec3(10,10,10))));
-						g_normal.push_back(norm);
-						g_normal.push_back(norm);
-						g_normal.push_back(norm);
+						g_normal[id].push_back(norm);
+						g_normal[id].push_back(norm);
+						g_normal[id].push_back(norm);
 					}
 				}
 			}
@@ -323,18 +327,24 @@ void CubeMarching::genVertices(GLfloat ***grid, GLfloat length, int w, int h, in
 
 void CubeMarching::draw()
 {
+	for(int i=1; g_vertex[i].size() && i<MAX_THREAD; i++)buffer_offset[i] = buffer_offset[i-1] + g_vertex[i-1].size();
 	glEnable(GL_DEPTH_TEST);
 	glBindBuffer(GL_ARRAY_BUFFER, normalbuffer);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, g_normal.size()*sizeof(glm::vec3), &g_normal[0]);
+	unsigned int size = 0;
+	for(int i=0; g_vertex[i].size() && i<MAX_THREAD; i++){
+		size+=g_vertex[i].size();
+		glBufferSubData(GL_ARRAY_BUFFER, buffer_offset[i]*sizeof(glm::vec3), g_normal[i].size()*sizeof(glm::vec3), &g_normal[i][0]);
+	}
 	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, g_vertex.size()*sizeof(glm::vec3), &g_vertex[0]);
+	for(int i=0; g_vertex[i].size() && i<MAX_THREAD; i++)
+		glBufferSubData(GL_ARRAY_BUFFER, buffer_offset[i]*sizeof(glm::vec3), g_vertex[i].size()*sizeof(glm::vec3), &g_vertex[i][0]);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-	glDrawArrays(GL_TRIANGLES, 0, 3*g_vertex.size());
+	glDrawArrays(GL_TRIANGLES, 0, 3*size);
 	glDisableVertexAttribArray(0);
 	glDisableVertexAttribArray(1);
 }
