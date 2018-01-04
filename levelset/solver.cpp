@@ -11,7 +11,7 @@
 #include <vector>
 #include "solver.h"
 #include "utility.h"
-
+#include <sys/time.h>
 static char subcell = 0;
 static char solver_mode = 0;
 namespace {
@@ -34,6 +34,8 @@ static void print_cl_mem(const char * s, cl_mem* tmp, int offset, int len)
 		printf("%f ", buf[i]);
 	puts("");
 }
+
+
 
 // Clamped Fetch
 static FLOAT x_ref( FLOAT ***A, FLOAT ***x, int fi, int fj, int fk, int i, int j, int k, int n ) {
