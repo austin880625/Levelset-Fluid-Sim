@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <vector>
 
 #if defined(__APPLE__) || defined(MACOSX)
 #include <GLUT/glut.h>
@@ -21,6 +22,7 @@
 #include <GL/gl.h>
 #include <GLFW/glfw3.h>
 #include <sys/time.h>
+#include <CL/cl.h>
 #endif
 
 #define max(i,j) (i>j?i:j)
@@ -35,6 +37,7 @@ void controller::init( int gn ) {
 	
 	// Initialize Liquid
 	liquid2D::init(gn);
+	printf("controller init finishedi\n");
 }
 /*
 void controller::reshape( int w, int h ) {

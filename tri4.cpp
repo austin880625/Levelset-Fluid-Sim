@@ -13,7 +13,7 @@
 GLFWwindow *window;
 int screen_width = 1024;
 int screen_height = 600;
-int gn = 32;
+int gn = 8;
 
 using namespace glm;
 

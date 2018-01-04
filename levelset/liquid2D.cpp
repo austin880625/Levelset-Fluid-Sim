@@ -74,6 +74,8 @@ static bool sphere( FLOAT x, FLOAT y, FLOAT z ) {
 void liquid2D::init( int n ) {
 	CubeMarching::init();
 	gn = n;
+	solver::setCL(n);
+	printf("setCL for solver finished\n");
 	if( ! p ) p = alloc3D<FLOAT>(gn);
 	if( ! d ) d = alloc3D<FLOAT>(gn);
 	if( ! A ) A = alloc3D<FLOAT>(gn);
@@ -284,7 +286,7 @@ static void compute_pressure() {
 	
 	//FOR_EVERY_CELL(gn){printf("%d %d %d %f\t%f\n",i,j,k, p[i][j][k], A[i][j][k]);}END_FOR
 	// Solve Ap = d ( p = Pressure, d = Divergence, A is the matrix of descretized laplacian in poisson equation )
-	solver::solve( A, p, d, gn, subcell, solver_mode );
+	solver::solve( A, p, d, subcell, solver_mode );
 }
 
 static void subtract_pressure() {
@@ -512,16 +514,16 @@ static void setMaxDistOfLevelSet() {
 void liquid2D::display() {
 	
 	// Mark Liquid Domain
-	markLiquid();
 	//FOR_EVERY_CELL(gn){printf("%d %d %d %f\n",i,j,k, p[i][j][k]);}END_FOR
 	//puts("markLiquid");
 	// Visualize Everything
 	//printf("%f \n",A[3][3][3]);
-	render();
 	//puts("render");
 	//getchar();
 	// Add Gravity Force
-	
+	markLiquid();
+	render();
+	// Extrapolate Quantity
 	addGravity();
 	
 	//puts("addGravity");
@@ -537,7 +539,6 @@ void liquid2D::display() {
 	subtract_pressure();
 	enforce_boundary();
 	
-	// Extrapolate Quantity
 	extrapolateVelocity();
 	
 
@@ -546,7 +547,8 @@ void liquid2D::display() {
 	
 	// Advect
 	levelset2D::advect(flow);
-	//getchar();
+
+//getchar();
 	
 	// Redistancing
 	/*

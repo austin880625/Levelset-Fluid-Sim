@@ -8,11 +8,21 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <vector>
 #include "solver.h"
 #include "utility.h"
 
 static char subcell = 0;
 static char solver_mode = 0;
+namespace {
+	int n;
+	cl_command_queue Q;
+	cl_context context;
+	cl_program program;
+	cl_mem A_cl, p_cl, r_cl, z_cl, s_cl;
+	cl_mem tmp_prod;
+	cl_kernel kern_compute_Ax, kern_op, kern_product, kern_copy, kern_clear;
+}
 
 // Clamped Fetch
 static FLOAT x_ref( FLOAT ***A, FLOAT ***x, int fi, int fj, int fk, int i, int j, int k, int n ) {
@@ -37,29 +47,43 @@ static void compute_Ax( FLOAT ***A, FLOAT ***x, FLOAT ***ans, int n ) {
 }
 
 // ans = x^T * x
-static FLOAT product( FLOAT ***A, FLOAT ***x, FLOAT ***y, int n ) {
+static FLOAT product( cl_mem *A, cl_mem *x, cl_mem *y, size_t ng ) {
 	FLOAT ans = 0.0;
-#pragma omp parallel for reduction(+:ans)
-	for( int i=0; i<n; i++ ) {
-		for( int j=0; j<n; j++ ) {
-			for( int k=0; k<n; k++){
-				if( A[i][j][k] < 0.0 ) ans += x[i][j][k]*y[i][j][k];
-			}
-		}
+	size_t dotGlobalws = 16*((n*n*n)/16+1);
+	size_t dotLocalws = 16;
+	cl_int error;
+	static float *partial = (float*)malloc((ng)*sizeof(float));
+	//printf("partial: %d\n",partial);
+#pragma omp parallel for
+	for(size_t i=0;i<ng;i++){
+		partial[i]=0;
 	}
+	clSetKernelArg(kern_product, 0, sizeof(cl_mem), (void*)A);
+	clSetKernelArg(kern_product, 1, sizeof(cl_mem), (void*)x);
+	clSetKernelArg(kern_product, 2, sizeof(cl_mem), (void*)y);
+	clSetKernelArg(kern_product, 3, sizeof(cl_mem), (void*)&tmp_prod);
+	clSetKernelArg(kern_product, 4, sizeof(int), (void*)&n);
+	error = clSetKernelArg(kern_product, 5, sizeof(float)*16, NULL);
+	clEnqueueNDRangeKernel(Q, kern_product, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+	clEnqueueReadBuffer(Q, tmp_prod, CL_TRUE, 0, sizeof(float)*ng, partial, 0,NULL,NULL);
+	//printf("prod %d\n",error);
+#pragma omp parallel for reduction(+:ans)
+	for( size_t i=0; i<ng; i++ ) {
+		ans+=partial[i];
+		//if(partial[i]==partial[i])printf("ipartial: %f\n",partial[i]);
+	}
+	//printf("prod %f\n",ans);
 	return ans;
 }
 
 // x = 0
-static void clear( FLOAT ***x, int n ) {
-#pragma omp parallel for
-	for( int i=0; i<n; i++ ) {
-		for( int j=0; j<n; j++ ) {
-			for(int k=0; k<n; k++){
-				x[i][j][k] = 0.0;
-			}
-		}
-	}
+static void clear( cl_mem *x, int n ) {
+	clSetKernelArg(kern_clear, 0, sizeof(cl_mem), (void*)x);
+	clSetKernelArg(kern_clear, 1, sizeof(cl_mem), (void*)&n);
+	size_t dotGlobalws = 16*((n*n*n)/16+1);
+	size_t dotLocalws = 16;
+	clEnqueueNDRangeKernel(Q, kern_clear, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+
 }
 
 static void flip( FLOAT ***x, int n ) {
@@ -109,128 +133,109 @@ static void residual( FLOAT ***A, FLOAT ***x, FLOAT ***b, FLOAT ***r, int n ) {
 static inline FLOAT square( FLOAT a ) {
 	return a*a;
 }
-/*
-static FLOAT A_ref( FLOAT **A, int i, int j, int qi, int qj, int n ) {
-	if( i<0 || i>n-1 || j<0 || j>n-1 || A[i][j]>0.0 ) return 0.0;
-	if( qi<0 || qi>n-1 || qj<0 || qj>n-1 || A[qi][qj]>0.0 ) return 0.0;
-	return -1.0;
-}
-*/
-/*
-static FLOAT A_diag( FLOAT **A, int i, int j, int n ) {
-	FLOAT diag = 4.0;
-	if( A[i][j] > 0.0 ) return diag;
-	int q[][2] = { {i-1,j}, {i+1,j}, {i,j-1}, {i,j+1} };
-	for( int m=0; m<4; m++ ) {
-		int qi = q[m][0];
-		int qj = q[m][1];
-		if( qi<0 || qi>n-1 || qj<0 || qj>n-1 ) diag -= 1.0;
-		else if( A[qi][qj] > 0.0 && subcell ) {
-			diag -= A[qi][qj]/fmin(1.0e-6,A[i][j]);
-		}
-	}
-	return diag;
-}
-*/
-/*
-static FLOAT P_ref( FLOAT **P, int i, int j, int n ) {
-	if( i<0 || i>n-1 || j<0 || j>n-1 ) return 0.0;
-	return P[i][j];
-}
-*/
-/*
-static void buildPreconditioner( FLOAT **P, FLOAT **A, int n ) {
-	clear(P,n);
-	FLOAT t = solver_mode == 2 ? 0.97 : 0.0;
-	FLOAT a = 0.25;
-	for( int i=0; i<n; i++ ) {
-		for( int j=0; j<n; j++ ) {
-			if( A[i][j] < 0.0 ) {
-				FLOAT left = A_ref(A,i-1,j,i,j,n)*P_ref(P,i-1,j,n);
-				FLOAT bottom = A_ref(A,i,j-1,i,j,n)*P_ref(P,i,j-1,n);
-				FLOAT mleft = A_ref(A,i-1,j,i,j,n)*A_ref(A,i,j-1,i,j,n)*square(P_ref(P,i-1,j,n));
-				FLOAT mbottom = A_ref(A,i,j-1,i,j,n)*A_ref(A,i-1,j,i,j,n)*square(P_ref(P,i,j-1,n));
-				
-				FLOAT diag = A_diag( A, i, j, n );
-				FLOAT e = diag - square(left) - square(bottom) - t*( mleft + mbottom );
-				if( e < a*diag ) e = diag;
-				P[i][j] = 1.0/sqrtf(e);
-			}
-		}
-	}
-}
-*/
-
 static void applyPreconditioner( FLOAT ***z, FLOAT ***r, FLOAT ***P, FLOAT ***A, int n ) {
 	if( solver_mode == 0 ) {
 		copy(z,r,n);
 		return;
 	}
-	/*
-	static FLOAT **q = alloc2D<FLOAT>(n);
-	clear(q,n);
-	
-	// Lq = r
-	for( int i=0; i<n; i++ ) {
-		for( int j=0; j<n; j++ ) {
-			if( A[i][j] < 0.0 ) {
-				FLOAT left = A_ref(A,i-1,j,i,j,n)*P_ref(P,i-1,j,n)*P_ref(q,i-1,j,n);
-				FLOAT bottom = A_ref(A,i,j-1,i,j,n)*P_ref(P,i,j-1,n)*P_ref(q,i,j-1,n);
-				
-				FLOAT t = r[i][j] - left - bottom;
-				q[i][j] = t*P[i][j];
-			}
-		}
-	}
-	
-	// L^T z = q
-	for( int i=n-1; i>=0; i-- ) {
-		for( int j=n-1; j>=0; j-- ) {
-			if( A[i][j] < 0.0 ) {
-				FLOAT right = A_ref(A,i,j,i+1,j,n)*P_ref(P,i,j,n)*P_ref(z,i+1,j,n);
-				FLOAT top = A_ref(A,i,j,i,j+1,n)*P_ref(P,i,j,n)*P_ref(z,i,j+1,n);
-				
-				FLOAT t = q[i][j] - right - top;
-				z[i][j] = t*P[i][j];
-			}
-		}
-	}
-	*/
 }
 
-static void conjGrad( FLOAT ***A, FLOAT ***P, FLOAT ***x, FLOAT ***b, int n ) {
+static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 	// Pre-allocate Memory
 	//printf("%d",solver_mode);
-	static FLOAT ***r = alloc3D<FLOAT>(n);
-	static FLOAT ***z = alloc3D<FLOAT>(n);
-	static FLOAT ***s = alloc3D<FLOAT>(n);
+	//static FLOAT ***r = alloc3D<FLOAT>(n);
+	//static FLOAT ***z = alloc3D<FLOAT>(n);
+	//static FLOAT ***s = alloc3D<FLOAT>(n);
+	printf("starting CG\n");
+	cl_int error = CL_SUCCESS;
+	for(int i=0; i<n; i++){
+		for(int j=0; j<n; j++){
+			//printf("%d %d %f\n",n,sizeof(A),*(A[i][j]+n-1));
+			error=clEnqueueWriteBuffer(Q, A_cl, CL_TRUE, (i*n*n+j*n)*sizeof(float), n*sizeof(float), (void*)A[i][j], 0,NULL,NULL);
+			//printf("A_cl finished with code %d\n",error);
+			error=clEnqueueWriteBuffer(Q, r_cl, CL_TRUE, (i*n*n+j*n)*sizeof(float), n*sizeof(float), b[i][j], 0,NULL,NULL);
+			//printf("r_cl finished with code %d\n",error);
+			error=clEnqueueWriteBuffer(Q, z_cl, CL_TRUE, (i*n*n+j*n)*sizeof(float), n*sizeof(float), b[i][j], 0,NULL,NULL);
+			//printf("z_cl finished with code %d\n",error);
+			error=clEnqueueWriteBuffer(Q, s_cl, CL_TRUE, (i*n*n+j*n)*sizeof(float), n*sizeof(float), b[i][j], 0,NULL,NULL);
+			//printf("s_cl finished with code %d\n",error);
+		}
+	}
+	size_t num_g = 16*(n/16+1);
+	size_t globalws[3] = {num_g,num_g,num_g};
+	size_t localws[3] = {16,16,16};
+	size_t dotGlobalws = 16*((n*n*n)/16+1);
+	size_t dotLocalws = 16;
 	
-	clear(x,n);									// p = 0
-	copy(r,b,n);								// r = b
-	applyPreconditioner(z,r,P,A,n);				// Apply Conditioner z = f(r)
-	copy(s,z,n);								// s = z
-	
-	FLOAT a = product( A, z, r, n );			// a = z . r
+	size_t dotnum_g = (n*n*n/16+1);
+	puts("starting iteration");
+	clear(&p_cl,n);
+	FLOAT a = product( &A_cl, &z_cl, &r_cl, dotnum_g );			// a = z . r
 	for( int k=0; k<200; k++ ) {
-		compute_Ax( A, s, z, n );				// z = applyA(s)
-		FLOAT alpha = a/product( A, z, s, n );	// alpha = a/(z . s)
-		//printf("%f %f\n", a, alpha);
-		op( A, x, s, x, alpha, n );				// p = p + alpha*s
-		op( A, r, z, r, -alpha, n );			// r = r - alpha*z;
-		FLOAT error2 = product( A, r, r, n );	// error2 = r . r
+		//compute_Ax( A, s, z, n );				// z = applyA(s)
+		
+		error=clSetKernelArg(kern_compute_Ax, 0, sizeof(cl_mem), (void*)&A_cl);
+		clSetKernelArg(kern_compute_Ax, 1, sizeof(cl_mem), (void*)&s_cl);
+		clSetKernelArg(kern_compute_Ax, 2, sizeof(cl_mem), (void*)&z_cl);
+		clSetKernelArg(kern_compute_Ax, 3, sizeof(int), (void*)&n);
+		//printf("%d\n",error);
+		
+		error=clEnqueueNDRangeKernel(Q, kern_compute_Ax, 3, NULL, (size_t*)globalws, (size_t*)localws, 0,NULL,NULL);
+		FLOAT alpha = a/product( &A_cl, &z_cl, &s_cl, dotnum_g );	// alpha = a/(z . s)
+		//printf("kern_compute_Ax %d %f %f\n",error, a, alpha);
+		clSetKernelArg(kern_op, 0, sizeof(cl_mem), (void*)&A_cl);
+		clSetKernelArg(kern_op, 1, sizeof(cl_mem), (void*)&p_cl);
+		clSetKernelArg(kern_op, 2, sizeof(cl_mem), (void*)&s_cl);
+		clSetKernelArg(kern_op, 3, sizeof(cl_mem), (void*)&p_cl);
+		clSetKernelArg(kern_op, 4, sizeof(float), (void*)&alpha);
+		clSetKernelArg(kern_op, 5, sizeof(int), (void*)&n);
+		error = clEnqueueNDRangeKernel(Q, kern_op, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		//printf("op %d\n",error);
+		//op( A, x, s, x, alpha, n );				// p = p + alpha*s
+		
+		alpha=-alpha;
+		clSetKernelArg(kern_op, 0, sizeof(cl_mem), (void*)&A_cl);
+		clSetKernelArg(kern_op, 1, sizeof(cl_mem), (void*)&r_cl);
+		clSetKernelArg(kern_op, 2, sizeof(cl_mem), (void*)&z_cl);
+		clSetKernelArg(kern_op, 3, sizeof(cl_mem), (void*)&r_cl);
+		clSetKernelArg(kern_op, 4, sizeof(float), (void*)&alpha);
+		clSetKernelArg(kern_op, 5, sizeof(int), (void*)&n);
+		error=clEnqueueNDRangeKernel(Q, kern_op, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		//printf("op %d\n",error);
+		//op( A, r, z, r, -alpha, n );			// r = r - alpha*z;
+		FLOAT error2 = product( &A_cl, &r_cl, &r_cl, dotnum_g );	// error2 = r . r
 		if( error2/(n*n*n) < 1.0e-6 ) break;
-		applyPreconditioner(z,r,P,A,n);			// Apply Conditioner z = f(r)
-		FLOAT a2 = product( A, z, r, n );		// a2 = z . r
+		
+		clSetKernelArg(kern_copy, 0, sizeof(cl_mem), (void*)&z_cl);
+		clSetKernelArg(kern_copy, 1, sizeof(cl_mem), (void*)&r_cl);
+		clSetKernelArg(kern_copy, 2, sizeof(int), (void*)&n);
+		error = clEnqueueNDRangeKernel(Q, kern_copy, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		//printf("copy %d\n",error);
+		//applyPreconditioner(z,r,P,A,n);			// Apply Conditioner z = f(r)
+		
+		FLOAT a2 = product( &A_cl, &z_cl, &r_cl, dotnum_g );		// a2 = z . r
 		FLOAT beta = a2/a;
-		op( A, z, s, s, beta, n );				// s = z + beta*s
+		clSetKernelArg(kern_op, 0, sizeof(cl_mem), (void*)&A_cl);
+		clSetKernelArg(kern_op, 1, sizeof(cl_mem), (void*)&z_cl);
+		clSetKernelArg(kern_op, 2, sizeof(cl_mem), (void*)&s_cl);
+		clSetKernelArg(kern_op, 3, sizeof(cl_mem), (void*)&s_cl);
+		clSetKernelArg(kern_op, 4, sizeof(float), (void*)&beta);
+		clSetKernelArg(kern_op, 5, sizeof(int), (void*)&n);
+		clEnqueueNDRangeKernel(Q, kern_op, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		//op( A, z, s, s, beta, n );				// s = z + beta*s
 		a = a2;
+	}
+	for(int i=0;i<n;i++){
+		for(int j=0;j<n;j++){
+			clEnqueueReadBuffer(Q, p_cl, CL_TRUE, (i*n*n+j*n)*sizeof(float), sizeof(float)*n, x[i][j], 0,NULL,NULL);
+		}
 	}
 }
 
-FLOAT solver::solve( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n, char subcell_aware, char solver_type ) {
-	static FLOAT ***r = alloc3D<FLOAT>(n);
-	static FLOAT ***P = alloc3D<FLOAT>(n);
-	clear(r,n);
+FLOAT solver::solve( FLOAT ***A, FLOAT ***x, FLOAT ***b, char subcell_aware, char solver_type ) {
+	//static FLOAT ***r = alloc3D<FLOAT>(n);
+	//static FLOAT ***P = alloc3D<FLOAT>(n);
+	//clear(r,n);
 	
 	// Save Mode
 	subcell = subcell_aware;
@@ -243,10 +248,78 @@ FLOAT solver::solve( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n, char subcell_awa
 	//if( solver_mode >= 1 ) buildPreconditioner(P,A,n);
 	
 	// Conjugate Gradient Method
-	conjGrad(A,P,x,b,n);
+	conjGrad(A,x,b,n);
 
-	residual(A,x,b,r,n);
-	FLOAT res = sqrt(product( A, r, r, n ))/(n*n*n);
+	//residual(A,x,b,r,n);
+	//FLOAT res = sqrt(product( A, r, r, n ))/(n*n*n);
 	//printf( "Residual = %e\n", res );
-	return res;
+	return 0.0;
+}
+
+void loadKernel(cl_device_id dev){
+	static const int MAX_SOURCE_SIZE = 4048576;
+	FILE *kernel_fp = fopen("levelset/kernels/solver.cl", "r");
+	printf("File opend as %d\n");
+	char * kernelSource = (char *)malloc(MAX_SOURCE_SIZE*sizeof(char));
+	unsigned int sourceSize = fread( kernelSource, 1, MAX_SOURCE_SIZE, kernel_fp );
+	fclose(kernel_fp);
+	kernelSource[sourceSize++] = '\0';
+
+	cl_int error = CL_SUCCESS;
+	program = clCreateProgramWithSource(context, 1, (const char **)&kernelSource, NULL, &error);
+	printf("program creating error code: %d\n",error);
+	error = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+	printf("program building error code: %d\n",error);
+	if(error < 0) {
+		size_t log_size;
+		clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, 
+			0, NULL, &log_size);
+		char *program_log = (char*) malloc(log_size + 1);
+		program_log[log_size] = '\0';
+		clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, 
+			log_size + 1, program_log, NULL);
+		printf("%s\n", program_log);
+		free(program_log);
+		exit(1);
+	}
+
+	kern_compute_Ax = clCreateKernel(program, "compute_Ax", &error);
+	kern_op = clCreateKernel(program, "op", &error);
+	kern_product = clCreateKernel(program, "product", &error);
+	kern_copy = clCreateKernel(program, "copy", &error);
+	kern_clear = clCreateKernel(program, "clear", &error);
+}
+void solver::setCL(int _n){
+	n=_n;
+	cl_uint platformIdCount = 0;
+	clGetPlatformIDs(0, NULL, &platformIdCount);
+
+	std::vector<cl_platform_id> platformIds(platformIdCount);
+	clGetPlatformIDs(platformIdCount, platformIds.data(), NULL);
+
+	cl_uint deviceIdCount = 0;
+	clGetDeviceIDs(platformIds[0], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceIdCount);
+	
+	std::vector<cl_device_id> deviceIds(deviceIdCount);
+	clGetDeviceIDs(platformIds[0], CL_DEVICE_TYPE_ALL, deviceIdCount, deviceIds.data(), NULL);
+
+	const cl_context_properties contextProperties [] = {CL_CONTEXT_PLATFORM, reinterpret_cast<cl_context_properties>(platformIds[0]), 0, 0};
+
+	cl_int error = CL_SUCCESS;
+	context = clCreateContext(contextProperties, deviceIdCount, deviceIds.data(), NULL, NULL, &error);
+	error = CL_SUCCESS;
+	printf("num of dev: %u\n",deviceIds.size());
+	Q = clCreateCommandQueue(context, deviceIds[1], 0, &error);
+	
+	printf("%d\n",error);
+
+	loadKernel(deviceIds[1]);
+	printf("Kernel loaded\n");
+	int n3=n*n*n;
+	A_cl = clCreateBuffer(context, CL_MEM_READ_ONLY, n3*sizeof(float), NULL, &error);
+	p_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, n3*sizeof(float), NULL, &error);
+	r_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, n3*sizeof(float), NULL, &error);
+	z_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, n3*sizeof(float), NULL, &error);
+	s_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, n3*sizeof(float), NULL, &error);
+	tmp_prod = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (n3/16+1)*sizeof(float), NULL, &error);
 }
