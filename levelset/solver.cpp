@@ -75,12 +75,13 @@ static FLOAT product( cl_mem *A, cl_mem *x, cl_mem *y, size_t ng ) {
 	clSetKernelArg(kern_product, 3, sizeof(cl_mem), (void*)&tmp_prod);
 	clSetKernelArg(kern_product, 4, sizeof(int), (void*)&n);
 	error = clSetKernelArg(kern_product, 5, sizeof(float)*16, NULL);
-	clEnqueueNDRangeKernel(Q, kern_product, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+	error = clEnqueueNDRangeKernel(Q, kern_product, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+	printf("%d\n",error);
 	clFinish(Q);
-	clEnqueueReadBuffer(Q, tmp_prod, CL_TRUE, 0, sizeof(float)*ng, partial, 0,NULL,NULL);
+	error=clEnqueueReadBuffer(Q, tmp_prod, CL_TRUE, 0, sizeof(float)*ng, partial, 0,NULL,NULL);
 	clFinish(Q);
 	
-	//printf("prod %d\n",error);
+	printf("%d\n",error);
 #pragma omp parallel for reduction(+:ans)
 	for( size_t i=0; i<ng; i++ ) {
 		if(partial[i]==partial[i]){
@@ -178,7 +179,7 @@ static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 	//static FLOAT ***r = alloc3D<FLOAT>(n);
 	//static FLOAT ***z = alloc3D<FLOAT>(n);
 	//static FLOAT ***s = alloc3D<FLOAT>(n);
-	printf("starting CG\n");
+	//printf("starting CG\n");
 	cl_int error = CL_SUCCESS;
 	for(int i=0; i<n; i++){
 		for(int j=0; j<n; j++){
@@ -201,7 +202,7 @@ static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 	size_t dotLocalws = 16;
 	
 	size_t dotnum_g = (n*n*n/16+1);
-	puts("starting iteration");
+	//puts("starting iteration");
 	clear(&p_cl,n);
 	print_cl_mem("p_before", &p_cl, 0, n*n*n);
 	FLOAT a = product( &A_cl, &z_cl, &r_cl, dotnum_g );			// a = z . r
@@ -212,16 +213,17 @@ static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 		clSetKernelArg(kern_compute_Ax, 1, sizeof(cl_mem), (void*)&s_cl);
 		clSetKernelArg(kern_compute_Ax, 2, sizeof(cl_mem), (void*)&z_cl);
 		clSetKernelArg(kern_compute_Ax, 3, sizeof(int), (void*)&n);
-		//printf("%d\n",error);
+		printf("%d\n",error);
 		
 		error=clEnqueueNDRangeKernel(Q, kern_compute_Ax, 3, NULL, (size_t*)globalws, (size_t*)localws, 0,NULL,NULL);
-		printf("error: %d\n", error);
+		printf("%d\n", error);
 		clFinish(Q);
 		print_cl_mem("z_cl", &z_cl, 0, n*n*n);
 		print_cl_mem("p_cl", &p_cl, 0, n*n*n);
 		print_cl_mem("s_cl", &s_cl, 0, n*n*n);
 		FLOAT alpha = a/product( &A_cl, &z_cl, &s_cl, dotnum_g );	// alpha = a/(z . s)
-		printf("kern_compute_Ax %d %f %f\n",error, a, alpha);
+		//printf("kern_compute_Ax %d %f %f\n",error, a, alpha);
+		printf("%d\n",error);
 		clSetKernelArg(kern_op, 0, sizeof(cl_mem), (void*)&A_cl);
 		clSetKernelArg(kern_op, 1, sizeof(cl_mem), (void*)&p_cl);
 		clSetKernelArg(kern_op, 2, sizeof(cl_mem), (void*)&s_cl);
@@ -229,6 +231,7 @@ static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 		clSetKernelArg(kern_op, 4, sizeof(float), (void*)&alpha);
 		clSetKernelArg(kern_op, 5, sizeof(int), (void*)&n);
 		error = clEnqueueNDRangeKernel(Q, kern_op, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		printf("%d\n",error);
 		clFinish(Q);
 		print_cl_mem("p_cl", &p_cl, 0, n*n*n);
 		//printf("op %d\n",error);
@@ -244,18 +247,20 @@ static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 		clSetKernelArg(kern_op, 4, sizeof(float), (void*)&alpha);
 		clSetKernelArg(kern_op, 5, sizeof(int), (void*)&n);
 		error=clEnqueueNDRangeKernel(Q, kern_op, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		printf("%d\n",error);
 		clFinish(Q);
 		print_cl_mem("r_cl", &r_cl, 0, n*n*n);
 		//printf("op %d\n",error);
 		//op( A, r, z, r, -alpha, n );			// r = r - alpha*z;
 		FLOAT error2 = product( &A_cl, &r_cl, &r_cl, dotnum_g );	// error2 = r . r
-		printf("%f\n", error2);
+		//printf("%f\n", error2);
 		if( error2/(n*n*n) < 1.0e-6 ) break;
 		
 		clSetKernelArg(kern_copy, 0, sizeof(cl_mem), (void*)&z_cl);
 		clSetKernelArg(kern_copy, 1, sizeof(cl_mem), (void*)&r_cl);
 		clSetKernelArg(kern_copy, 2, sizeof(int), (void*)&n);
 		error = clEnqueueNDRangeKernel(Q, kern_copy, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		printf("%d\n",error);
 		clFinish(Q);
 		//printf("copy %d\n",error);
 		//applyPreconditioner(z,r,P,A,n);			// Apply Conditioner z = f(r)
@@ -268,7 +273,8 @@ static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 		clSetKernelArg(kern_op, 3, sizeof(cl_mem), (void*)&s_cl);
 		clSetKernelArg(kern_op, 4, sizeof(float), (void*)&beta);
 		clSetKernelArg(kern_op, 5, sizeof(int), (void*)&n);
-		clEnqueueNDRangeKernel(Q, kern_op, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		error = clEnqueueNDRangeKernel(Q, kern_op, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
+		printf("%d\n",error);
 		clFinish(Q);
 		//op( A, z, s, s, beta, n );				// s = z + beta*s
 		a = a2;
@@ -336,6 +342,7 @@ void loadKernel(cl_device_id dev){
 	kern_product = clCreateKernel(program, "product", &error);
 	kern_copy = clCreateKernel(program, "copy", &error);
 	kern_clear = clCreateKernel(program, "clear", &error);
+	printf("%d\n",error);
 }
 void solver::setCL(int _n){
 	n=_n;
