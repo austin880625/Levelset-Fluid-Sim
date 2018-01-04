@@ -79,6 +79,11 @@ int main()
 	GLuint lightVecID = glGetUniformLocation(programID, "lightPos");
 	int angle=90;
 	do{
+		{ // evaluation block
+			static int fcnt = 0;
+			if(fcnt<100) ++fcnt;
+			else break;
+		}
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		//angle = (angle+2)%360;
 		mat4 view = lookAt(vec3(0,2,4), vec3(0,0,0), vec3(0,1,0));
