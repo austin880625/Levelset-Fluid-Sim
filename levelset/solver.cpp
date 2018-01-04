@@ -87,17 +87,15 @@ static void copy( FLOAT ***x, FLOAT ***y, int n ) {
 				 
 // Ans = x + a*y
 static void op( FLOAT ***A, FLOAT ***x, FLOAT ***y, FLOAT ***ans, FLOAT a, int n ) {
-	static FLOAT ***tmp = alloc3D<FLOAT>(n);
 #pragma omp parallel for
 	for( int i=0; i<n; i++ ) {
 		for( int j=0; j<n; j++ ) {
 			for(int k=0; k<n; k++){
-				if( A[i][j][k] < 0.0 ) tmp[i][j][k] = x[i][j][k]+a*y[i][j][k];
-				else tmp[i][j][k] = 0.0;
+				if( A[i][j][k] < 0.0 ) ans[i][j][k] = x[i][j][k]+a*y[i][j][k];
+				else ans[i][j][k] = 0.0;
 			}
 		}
 	}
-	copy(ans,tmp,n);
 }
 
 // r = b - Ax
