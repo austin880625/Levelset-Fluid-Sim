@@ -10,9 +10,11 @@
 #include <assert.h>
 #include "solver.h"
 #include "utility.h"
-
+#include <sys/time.h>
 static char subcell = 0;
 static char solver_mode = 0;
+
+
 
 // Clamped Fetch
 static FLOAT x_ref( FLOAT ***A, FLOAT ***x, int fi, int fj, int fk, int i, int j, int k, int n ) {
