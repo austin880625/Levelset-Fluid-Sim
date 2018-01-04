@@ -1,6 +1,6 @@
 CXX = g++
 LIBS = -lGL -lGLU -lGLEW -lX11 -lXxf86vm -lXrandr -lpthread -ldl -lXi  -lXinerama -lXcursor -fopenmp -lOpenCL
-OPT = --std=c++11
+OPT = -g --std=c++11
 GLFW = -lglfw
 GLFW3 = -lglfw3
 

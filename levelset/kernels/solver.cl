@@ -3,7 +3,8 @@ float x_ref( global float *A, global float *x, int fi, int fj, int fk, int i, in
 	j = min(max(0,j),n-1);
 	k = min(max(0,k),n-1);
 	if( A[i*n*n+j*n+k] < 0.0 ) return x[i*n*n+j*n+k];
-	return A[i*n*n+j*n+k]/min((float)1.0e-6,A[fi*n*n+fj*n+fk])*x[fi*n*n+fj*n+fk];
+	//return A[i*n*n+j*n+k]/min((float)1.0e-6,A[fi*n*n+fj*n+fk])*x[fi*n*n+fj*n+fk];
+	return 0;
 }
 __kernel void compute_Ax( __global float *A, __global float *x, __global float *ans, int n ) {
 	int i=get_global_id(0);

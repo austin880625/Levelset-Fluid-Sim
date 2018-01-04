@@ -13,7 +13,7 @@
 GLFWwindow *window;
 int screen_width = 1024;
 int screen_height = 600;
-int gn = 8;
+int gn = 32;
 
 using namespace glm;
 
@@ -77,14 +77,16 @@ int main()
 	GLuint mMatrixID = glGetUniformLocation(programID, "m");
 	GLuint vMatrixID = glGetUniformLocation(programID, "v");
 	GLuint lightVecID = glGetUniformLocation(programID, "lightPos");
-	int angle=90;
+	int angle=0;
+	char s[2];
 	do{
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		//angle = (angle+2)%360;
-		mat4 view = lookAt(vec3(0,2,4), vec3(0,0,0), vec3(0,1,0));
+		//scanf("%d",&angle);
+		mat4 view = lookAt(vec3(4*cos(angle*M_PI/180.0f),2,4*sin(angle*M_PI/180.f)), vec3(0,0,0), vec3(0,1,0));
 		mat4 model = mat4(1.0f);
 		mat4 mvp = projection*view*model;
-
+	
 		glUniformMatrix4fv(mvpMatrixID, 1, GL_FALSE, &mvp[0][0]);
 		glUniformMatrix4fv(mMatrixID, 1, GL_FALSE, &model[0][0]);
 		glUniformMatrix4fv(vMatrixID, 1, GL_FALSE, &view[0][0]);
