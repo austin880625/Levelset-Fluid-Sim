@@ -356,7 +356,8 @@ void levelset2D::redistance( FLOAT tolerance ) {
 */
 void levelset2D::buildLevelset( bool (*func)(FLOAT x, FLOAT y, FLOAT z), FLOAT tolerance ) {
 	// Initialize Distances
-	OPENMP_FOR FOR_EVERY_CELL(gn) {
+#pragma omp parallel for
+	FOR_EVERY_CELL(gn) {
 		FLOAT x = i/(FLOAT)(gn-1);
 		FLOAT y = j/(FLOAT)(gn-1);
 		FLOAT z = k/(FLOAT)(gn-1);
@@ -409,6 +410,7 @@ void levelset2D::advect( void (*func)( FLOAT x, FLOAT y, FLOAT z, FLOAT &u, FLOA
 	} END_FOR;
 	
 	// Swap
+#pragma omp parallel for
 	FOR_EVERY_CELL(gn) {
 		grids[i][j][k].dist = swap_dists[i][j][k];
 	} END_FOR;
