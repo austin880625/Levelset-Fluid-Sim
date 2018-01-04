@@ -80,6 +80,11 @@ int main()
 	int angle=0;
 	char s[2];
 	do{
+		{ // time-out
+			static int fcnt = 0;
+			if(fcnt<300) ++fcnt;
+			else break;
+		}
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		//angle = (angle+2)%360;
 		//scanf("%d",&angle);

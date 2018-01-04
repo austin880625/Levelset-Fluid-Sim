@@ -60,8 +60,8 @@ static void compute_Ax( FLOAT ***A, FLOAT ***x, FLOAT ***ans, int n ) {
 // ans = x^T * x
 static FLOAT product( cl_mem *A, cl_mem *x, cl_mem *y, size_t ng ) {
 	FLOAT ans = 0.0;
-	size_t dotGlobalws = 16*((n*n*n)/16+1);
-	size_t dotLocalws = 16;
+	size_t dotGlobalws = 8*((n*n*n)/8+1);
+	size_t dotLocalws = 8;
 	cl_int error;
 	static float *partial = (float*)malloc((ng)*sizeof(float));
 	//printf("partial: %d\n",partial);
@@ -74,7 +74,7 @@ static FLOAT product( cl_mem *A, cl_mem *x, cl_mem *y, size_t ng ) {
 	clSetKernelArg(kern_product, 2, sizeof(cl_mem), (void*)y);
 	clSetKernelArg(kern_product, 3, sizeof(cl_mem), (void*)&tmp_prod);
 	clSetKernelArg(kern_product, 4, sizeof(int), (void*)&n);
-	error = clSetKernelArg(kern_product, 5, sizeof(float)*16, NULL);
+	error = clSetKernelArg(kern_product, 5, sizeof(float)*8, NULL);
 	error = clEnqueueNDRangeKernel(Q, kern_product, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
 	//printf("%d\n",error);
 	//clFinish(Q);
@@ -110,8 +110,8 @@ static FLOAT product2( cl_mem *A, cl_mem *x, cl_mem *y, size_t ng ){
 static void clear( cl_mem *x, int n ) {
 	clSetKernelArg(kern_clear, 0, sizeof(cl_mem), (void*)x);
 	clSetKernelArg(kern_clear, 1, sizeof(int), (void*)&n);
-	size_t dotGlobalws = 16*((n*n*n)/16+1);
-	size_t dotLocalws = 16;
+	size_t dotGlobalws = 8*((n*n*n)/8+1);
+	size_t dotLocalws = 8;
 	int err = clEnqueueNDRangeKernel(Q, kern_clear, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
 	//printf("clear err: %d\n", err);
 	print_cl_mem("after clear", x, 0, n*n*n);
@@ -195,13 +195,13 @@ static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 			//printf("s_cl finished with code %d\n",error);
 		}
 	}
-	size_t num_g = 16*(n/16+1);
+	size_t num_g = 8*(n/8+1);
 	size_t globalws[3] = {num_g,num_g,num_g};
-	size_t localws[3] = {16,16,16};
-	size_t dotGlobalws = 16*((n*n*n)/16+1);
-	size_t dotLocalws = 16;
+	size_t localws[3] = {8,8,8};
+	size_t dotGlobalws = 8*((n*n*n)/8+1);
+	size_t dotLocalws = 8;
 	
-	size_t dotnum_g = (n*n*n/16+1);
+	size_t dotnum_g = (n*n*n/8+1);
 	//puts("starting iteration");
 	clear(&p_cl,n);
 	print_cl_mem("p_before", &p_cl, 0, n*n*n);
@@ -364,11 +364,11 @@ void solver::setCL(int _n){
 	context = clCreateContext(contextProperties, deviceIdCount, deviceIds.data(), NULL, NULL, &error);
 	error = CL_SUCCESS;
 	printf("num of dev: %u\n",deviceIds.size());
-	Q = clCreateCommandQueue(context, deviceIds[1], 0, &error);
+	Q = clCreateCommandQueue(context, deviceIds[0], 0, &error);
 	
 	printf(">>> %d\n",error);
 
-	loadKernel(deviceIds[1]);
+	loadKernel(deviceIds[0]);
 	printf("Kernel loaded\n");
 	int n3=n*n*n;
 	A_cl = clCreateBuffer(context, CL_MEM_READ_ONLY, n3*sizeof(float), NULL, &error);
@@ -376,5 +376,5 @@ void solver::setCL(int _n){
 	r_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, n3*sizeof(float), NULL, &error);
 	z_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, n3*sizeof(float), NULL, &error);
 	s_cl = clCreateBuffer(context, CL_MEM_READ_WRITE, n3*sizeof(float), NULL, &error);
-	tmp_prod = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (n3/16+1)*sizeof(float), NULL, &error);
+	tmp_prod = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (n3/8+1)*sizeof(float), NULL, &error);
 }
