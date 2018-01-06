@@ -16,6 +16,7 @@ static char subcell = 0;
 static char solver_mode = 0;
 namespace {
 	int n;
+	int max_gs=32;
 	cl_command_queue Q;
 	cl_context context;
 	cl_program program;
@@ -62,8 +63,8 @@ static void compute_Ax( FLOAT ***A, FLOAT ***x, FLOAT ***ans, int n ) {
 // ans = x^T * x
 static FLOAT product( cl_mem *A, cl_mem *x, cl_mem *y, size_t ng ) {
 	FLOAT ans = 0.0;
-	size_t dotGlobalws = 8*((n*n*n)/8+1);
-	size_t dotLocalws = 8;
+	size_t dotGlobalws = max_gs*((n*n*n)/max_gs+1);
+	size_t dotLocalws = max_gs;
 	cl_int error;
 	static float *partial = (float*)malloc((ng)*sizeof(float));
 	//printf("partial: %d\n",partial);
@@ -112,8 +113,8 @@ static FLOAT product2( cl_mem *A, cl_mem *x, cl_mem *y, size_t ng ){
 static void clear( cl_mem *x, int n ) {
 	clSetKernelArg(kern_clear, 0, sizeof(cl_mem), (void*)x);
 	clSetKernelArg(kern_clear, 1, sizeof(int), (void*)&n);
-	size_t dotGlobalws = 8*((n*n*n)/8+1);
-	size_t dotLocalws = 8;
+	size_t dotGlobalws = max_gs*((n*n*n)/max_gs+1);
+	size_t dotLocalws = max_gs;
 	int err = clEnqueueNDRangeKernel(Q, kern_clear, 1, NULL, (size_t*)&dotGlobalws, (size_t*)&dotLocalws, 0,NULL,NULL);
 	//printf("clear err: %d\n", err);
 	print_cl_mem("after clear", x, 0, n*n*n);
@@ -200,15 +201,15 @@ static void conjGrad( FLOAT ***A, FLOAT ***x, FLOAT ***b, int n ) {
 	size_t num_g = 8*(n/8+1);
 	size_t globalws[3] = {num_g,num_g,num_g};
 	size_t localws[3] = {8,8,8};
-	size_t dotGlobalws = 8*((n*n*n)/8+1);
-	size_t dotLocalws = 8;
+	size_t dotGlobalws = max_gs*((n*n*n)/max_gs+1);
+	size_t dotLocalws = max_gs;
 	
-	size_t dotnum_g = (n*n*n/8+1);
+	size_t dotnum_g = (n*n*n/max_gs+1);
 	//puts("starting iteration");
 	clear(&p_cl,n);
 	print_cl_mem("p_before", &p_cl, 0, n*n*n);
 	FLOAT a = product( &A_cl, &z_cl, &r_cl, dotnum_g );			// a = z . r
-	for( int k=0; k<50; k++ ) {
+	for( int k=0; k<150; k++ ) {
 		//compute_Ax( A, s, z, n );				// z = applyA(s)
 		
 		error=clSetKernelArg(kern_compute_Ax, 0, sizeof(cl_mem), (void*)&A_cl);
@@ -372,6 +373,8 @@ void solver::setCL(int _n){
 
 	loadKernel(deviceIds[0]);
 	printf("Kernel loaded\n");
+	printf("%d\n",CL_DEVICE_MAX_WORK_GROUP_SIZE);
+	printf("%d\n",CL_DEVICE_MAX_WORK_ITEM_SIZES);
 	int n3=n*n*n;
 	A_cl = clCreateBuffer(context, CL_MEM_READ_ONLY, n3*sizeof(float), NULL, &error);
 	p_cl = clCreateBuffer(context, CL_MEM_WRITE_ONLY, n3*sizeof(float), NULL, &error);

@@ -13,7 +13,7 @@
 GLFWwindow *window;
 int screen_width = 1024;
 int screen_height = 600;
-int gn = 32;
+int gn = 48;
 
 using namespace glm;
 
@@ -83,7 +83,7 @@ int main()
 		{ // time-out
 			static int fcnt = 0;
 			if(fcnt<300) ++fcnt;
-			else break;
+			//else break;
 		}
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 		//angle = (angle+2)%360;
