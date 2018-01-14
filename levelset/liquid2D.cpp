@@ -59,6 +59,22 @@ using namespace std;
 #include <sys/time.h>
 #endif
 
+struct timeval start_time[100];
+int timer_cnt = 0;
+void time_start()
+{
+	gettimeofday(start_time + timer_cnt++, NULL);
+}
+
+void time_stop()
+{
+	struct timeval end;
+	gettimeofday(&end, NULL);	
+	struct timeval start = start_time[--timer_cnt];
+	long long diff = 1000000LL * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+	printf("time elapsed: %lld ms\n", diff / 1000);
+}
+
 static bool sphere( FLOAT x, FLOAT y, FLOAT z ) {
 	switch (reset_count) {
 		case 1:
@@ -511,6 +527,7 @@ static void setMaxDistOfLevelSet() {
 
 void liquid2D::display() {
 	
+	time_start();
 	// Mark Liquid Domain
 	markLiquid();
 	//FOR_EVERY_CELL(gn){printf("%d %d %d %f\n",i,j,k, p[i][j][k]);}END_FOR
@@ -532,7 +549,11 @@ void liquid2D::display() {
 	enforce_boundary();
 	comp_divergence();
 	//puts("computepressure");
+	
+	time_start();
 	compute_pressure();
+	printf("compute_pressure: ");
+	time_stop();
 	//FOR_EVERY_CELL(gn){printf("%d %d %d %f\n",i,j,k, p[i][j][k]);}END_FOR
 	subtract_pressure();
 	enforce_boundary();
@@ -546,6 +567,8 @@ void liquid2D::display() {
 	
 	// Advect
 	levelset2D::advect(flow);
+	printf("overall: ");
+	time_stop();
 	//getchar();
 	
 	// Redistancing
